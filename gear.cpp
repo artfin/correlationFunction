@@ -18,12 +18,12 @@
 *        and Frank Uhlig, Springer-Verlag, 1996" [BIBLI 11].           *
 ***********************************************************************/
 
-#include <basis.hpp>     /*  for  REAL, ZERO, FABS, dglsysfnk, POW,     */
+#include "basis.hpp"     /*  for  REAL, ZERO, FABS, dglsysfnk, POW,     */
                        /*       MACH_EPS, TEN, SQRT, ONE, norm_max,   */
                        /*       copy_vector, FIVE, TWO, THREE, FOUR,  */
                        /*       gauss, NULL, SIX, sqr, min,           */
                        /*       max, boolean, TRUE, FALSE, fehler_t   */
-#include <vmblock.hpp>   /*  for  vmalloc, vmcomplete, vmfree, vminit,  */
+#include "vmblock.hpp"   /*  for  vmalloc, vmcomplete, vmfree, vminit,  */
                        /*       VEKTOR, MATRIX, VVEKTOR               */
 #include "awp.hpp"       /*  for  awp                                   */
 #include "gear.hpp"      /*  for  gear4, gear_fehlertext                */

@@ -20,11 +20,11 @@
 * REF.: "Numerical Algorithms with C, By Gisela Engeln-Muellges        *
 *        and Frank Uhlig, Springer-Verlag, 1996" [BIBLI 11].           *
 ***********************************************************************/
-#include <basis.hpp>      /*  for  MACH_EPS, FABS, max, SQRT, REAL,     */
+#include "basis.hpp"      /*  for  MACH_EPS, FABS, max, SQRT, REAL,     */
                         /*       dglsysfnk, POW, min, FALSE, TRUE,    */
                         /*       boolean, norm_max, ZERO, FOUR, SIX,  */
                         /*       THREE, ONE, TWO, TEN, FIVE, NULL     */
-#include <vmblock.hpp>    /*  for  vmalloc, vmcomplete, vmfree, vminit, */
+#include "vmblock.hpp"    /*  for  vmalloc, vmcomplete, vmfree, vminit, */
                         /*       VEKTOR                               */
 #include "awp.hpp"        /*  for  awp, fehler_t, awp_fehlertext        */
 

@@ -1,0 +1,23 @@
+.PHONY: clean all
+
+CCXX = mpic++
+
+CXXFLAGS = -std=c++11 -g -O2 -lm -Wall -Wextra
+
+BUILDDIR := ./build/
+
+all: main
+
+main: $(addprefix $(BUILDDIR), $(patsubst %.cpp, %.o, $(wildcard *.cpp)))
+	$(CCXX) $(CXXFLAGS) $^ -o $@
+
+$(BUILDDIR)%.o: %.cpp
+	@echo ">> (mpic++) Compiling $<...";
+	@$(CCXX) $(CXXFLAGS) -c -MD $< -o $@
+
+include $(wildcard *.d)
+
+clean:
+	@rm -f main
+	@rm -f $(BUILDDIR)*.o
+	@rm -f $(BUILDDIR)*.d
