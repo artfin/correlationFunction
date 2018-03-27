@@ -1,0 +1,40 @@
+$conditions
+	Temperature = 295.0
+$end
+
+$trajectory
+	RDIST = 40.0
+
+	% 5*10**(-16) s
+	% sampling_time = 20.67068666828068
+	sampling_time = 50 
+
+	MaxTrajectoryLength = 1 
+	FREQ_MAX = 700.0
+$end
+
+% Buryak-Vigasin article
+% He - Ar
+% for the first version of spectrum calculation with 
+% grid (b, v0)
+% v0: 200 - 4600 m/s
+% b: 0.0 - 4.0 A
+
+% if grid program is used, then NPOINTS points are selected from each of the 
+% smaller rectangles specified in $gridparameters block.
+% if MCMC program is used, the NPOINTS is the total amount of points used in simulation
+
+$mcparameters
+	DIM = 6 % R, pR, theta, pTheta, phi, pPhi 
+	initial_point = 7.0 0.0 0.0 0.0 0.0 0.0 
+	alpha = 2.0 
+	subchain_length = 5 
+    NPOINTS = 200
+$end
+
+$files
+	output_directory = ./results/equilibrium_mean/50000/
+	specfunc_filename = specfunc_eq_mean.txt
+	m2_filename = m2_eq_mean.txt
+	spectrum_filename = spectrum_eq_mean.txt
+$end
