@@ -1,4 +1,5 @@
-#include <mpi.h>
+//#include <mpi.h>
+#include <mpi/mpi.h>
 
 #include <iostream>
 #include <ctime>
@@ -18,13 +19,16 @@
 unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
 std::mt19937 mcmc_generator{ seed };
 
-const int CORRELATION_FUNCTION_LENGTH = 100;
+const int CORRELATION_FUNCTION_LENGTH = 3000;
 
 const double step = 1.5;
 const double DIM = 6;
 
-const double Racc_max = 40.0;
-const double Racc_min = 4.0;
+const double Racc_max = 60.0;
+const double Racc_min = 2.0;
+
+const double Rint_max = 40.0;
+const double Rint_min = 4.0;
 
 const double MU = 6632.039;
 
@@ -90,12 +94,12 @@ std::vector<double> MHA_generate_point(std::vector<double> x, int getOutOf,
         sample(x, xcand);
         double alpha = density(xcand) / density(x);
 
-        if ( unidistr(mcmc_generator) < std::min(alpha, 1.0) )
+        if ( unidistr(mcmc_generator) < alpha )
         {
             x = xcand;
         }
 
-        if ( (counter > getOutOf) && (xcand[0] > Racc_min) && (xcand[0] < Racc_max) )
+        if ( (counter > getOutOf) && (xcand[0] > Rint_min) && (xcand[0] < Rint_max) )
         {
             return xcand;
         }
@@ -130,6 +134,26 @@ void syst (REAL t, REAL *y, REAL *f)
     delete [] out;
 }
 
+void save_correlation_function_final( std::vector<double> const & v, const std::string filename, const double sampling_time )
+{
+    double time = 0.0;
+
+    std::ofstream outFile( filename );
+    for ( size_t k = 0; k < v.size(); k++, time += sampling_time )
+        outFile << time << " " << v[k] << std::endl;
+
+    outFile.close();
+}
+
+void save_correlation_function_debug( std::vector<double> const & v, const std::string filename, const double constant )
+{
+    std::ofstream outFile( filename );
+    for ( size_t k = 0; k < v.size(); k++ )
+        outFile << v[k] * constant << std::endl;
+
+    outFile.close();
+}
+
 void master_code( int world_size )
 {
     MPI_Status status;
@@ -149,7 +173,7 @@ void master_code( int world_size )
     const int burnin = 3e4;
     std::vector<double> initial_after_burnin = MHA_burnin( burnin, parameters.initial_point, density );
 
-    const int getOutOf = 3;
+    const int getOutOf = 10;
     std::vector<double> p = MHA_generate_point( initial_after_burnin, getOutOf, density );
 
     // sending first trajectory
@@ -166,10 +190,13 @@ void master_code( int world_size )
         sent++;
     }
 
-    std::clock_t start = clock();
-
     std::vector<double> correlation_total(CORRELATION_FUNCTION_LENGTH);
     std::vector<double> correlation_package(CORRELATION_FUNCTION_LENGTH);
+
+    const int toSave = 1000; // раз в какое количество точек сохранять файл
+    std::string filenameCorrelationFunction = "../output/equilibrium_correlation.txt";
+
+    double Volume = 4.0 / 3.0 * M_PI * pow( Rint_max * constants::ALU, 3);
 
     while( true )
     {
@@ -186,7 +213,7 @@ void master_code( int world_size )
         source = status.MPI_SOURCE;
         if ( status.MPI_TAG == tags::TRAJECTORY_CUT_TAG )
         {
-            //cout << "(master) Received cutting trajectory tag!" << endl;
+            std::cout << "(master) Received cutting trajectory tag!" << std::endl;
             if ( sent <= parameters.NPOINTS )
             {
                 p = MHA_generate_point( p, getOutOf, density );
@@ -199,44 +226,34 @@ void master_code( int world_size )
             }
         }
 
-        /*
-        if ( status.MPI_TAG == tags::TRAJECTORY_FINISHED_TAG )
-            cout << "(master) Trajectory is not cut!" << endl;
-        */
-
         std::fill( correlation_package.begin(), correlation_package.end(), 0.0 );
 
         MPI_Recv( &correlation_package[0], CORRELATION_FUNCTION_LENGTH, MPI_DOUBLE, source, MPI_ANY_TAG, MPI_COMM_WORLD, &status );
 
-        double Volume = 4.0 / 3.0 * M_PI * pow(parameters.RDIST * constants::ALU, 3);
-        double correlationFunctionConstant = Volume; // * constants::ADIPMOMU * constants::ADIPMOMU \
-                                / (4 * M_PI * constants::EPSILON0);
-
-        if ( received >= 1 )
+        for ( size_t i = 0; i < CORRELATION_FUNCTION_LENGTH; i++ )
         {
-            for ( size_t i = 0; i < CORRELATION_FUNCTION_LENGTH; i++ )
-            {
-                // размерность корреляции дипольного момента -- квадрат диполя
-                correlation_total[i] += correlation_package[i] * correlationFunctionConstant;
-                correlation_total[i] *= 0.5;
-            }
-        }
-        else
-        {
-            for ( size_t i = 0; i < CORRELATION_FUNCTION_LENGTH; i++ )
-                correlation_total[i] += correlation_package[i] * correlationFunctionConstant;
+            correlation_total[i] += correlation_package[i];
         }
 
         received++;
         //cout << "(master) after all MPI_Recv; received = " << received << endl;
 
+        if ( (received + 1) % toSave == 0 )
+        {
+            std::cout << "(debug) Saving correlation file to " << filenameCorrelationFunction << std::endl;
+            save_correlation_function_debug( correlation_total, filenameCorrelationFunction, Volume / received );
+        }
+
         if ( received == parameters.NPOINTS )
         {
-            std::ofstream file( "../output/equilibrium_correlation.txt" );
-            for ( size_t k = 0; k < CORRELATION_FUNCTION_LENGTH; k++ )
-                file << correlation_total[k] << std::endl;
-            file.close();
+            for ( size_t k = 0; k < correlation_total.size(); k++ )
+            {
+                correlation_total[k] *= Volume / received;
+            }
 
+            std::cout << "(final) Saving correlation file to " << filenameCorrelationFunction << std::endl;
+            save_correlation_function_final( correlation_total, filenameCorrelationFunction,
+                                             parameters.sampling_time * constants::ATU );
             is_finished = true;
         }
 
@@ -286,6 +303,8 @@ void slave_code( int world_rank )
     Parameters parameters;
     FileReader fileReader( "../parameters.in", &parameters );
 
+    MPI_Status status;
+
     int cut_trajectory = 0;
     bool exit_status = false;
     Trajectory trajectory( parameters );
@@ -297,7 +316,7 @@ void slave_code( int world_rank )
     {
         // переменная cut_trajectory играет роль переменной типа bool
         // ( это сделано для того, чтобы переменная могла быть переслана при помощи MPI_Send,
-        // там нет встроенного типа MPI_BOOL. )
+        // нет встроенного типа MPI_BOOL. )
         //
         // если траектория оказывается обрублена (длиннее чем parameters.MaxTrajectoryLength точек),
         // то в классе Trajectory статус траектории становится cut и при помощи метода
@@ -319,8 +338,17 @@ void slave_code( int world_rank )
             break;
         }
 
-        // начинаем траекторию из полученного начального положения в фазовом пространстве
+        // начинаем расчет траектории
         trajectory.run_trajectory( syst );
+
+        // собираем статус траектории. метод отправляет статус траектории мастеру
+        // если траектория обрублена, то обнуляем буферы хранения диполя с траектории
+        cut_trajectory = trajectory.report_trajectory_status( );
+        if ( cut_trajectory )
+        {
+            trajectory.dump_dipoles();
+            continue;
+        }
 
         // если мы прошли предыдущий блок кода, значит траектория имеет допустимую длину.
         // копируем компоненты дипольного момента вдоль траектории в виде структуры данных vector<double>
@@ -328,14 +356,7 @@ void slave_code( int world_rank )
         dipy_forward = trajectory.get_dipy();
         dipz_forward = trajectory.get_dipz();
         // после копирования освобождаем эти вектора внутри объекта trajectory
-        trajectory.dump_dipoles( );
-
-        cut_trajectory = trajectory.report_trajectory_status( );
-        if ( cut_trajectory )
-        {
-            trajectory.dump_dipoles();
-            continue;
-        }
+         trajectory.dump_dipoles( );
 
         std::cout << "(" << world_rank << ") Processing " << trajectory.get_trajectory_counter()
                   << " trajectory. npoints = " << dipz_forward.size() << "; time = "

@@ -71,6 +71,8 @@ public:
     int get_trajectory_counter( void ) const { return trajectory_counter; }
     void set_cut_trajectory( int status ) { cut_trajectory = status; }
 
+    REAL get_R() const { return y0[0]; }
+
 private:
     Parameters parameters;
 
