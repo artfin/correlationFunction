@@ -261,12 +261,13 @@ void calculate_physical_correlation( std::vector<double> & physical_correlation,
     assert( dipy.size() == size );
     assert( dipz.size() == size );
 
-    int MAX = std::min(CORRELATION_FUNCTION_LENGTH, (int) size);
+    int max_size = std::min(CORRELATION_FUNCTION_LENGTH, (int) size);
 
+    // подготавливает вектор нужного размера, заполняет его элементы нулями
     physical_correlation.resize( CORRELATION_FUNCTION_LENGTH );
 
     double res = 0;
-    for ( int n = 0; n < MAX; n++ )
+    for ( int n = 0; n < max_size; n++ )
     {
         res = 0;
         for ( size_t i = 0, j = n; j < size; i++, j++ )
@@ -278,22 +279,6 @@ void calculate_physical_correlation( std::vector<double> & physical_correlation,
 
         physical_correlation[n] = res / (size - n);
     }
-}
-
-// использует move semantics или Named Return Value Optimization, до конца не разобрался
-// но в любом случае здесь мы сливаем два вектора в один, копирования результата НЕ происходит
-std::vector<double> merge( std::vector<double> & backward, std::vector<double> & forward )
-{
-    std::vector<double> merged;
-    merged.reserve( backward.size() + forward.size() );
-
-    for ( auto rit = backward.rbegin(); rit != backward.rend(); ++rit )
-        merged.push_back( *rit );
-
-    for ( auto it = forward.begin(); it != forward.end(); ++it )
-        merged.push_back( *it );
-
-    return merged;
 }
 
 void slave_code( int world_rank )
@@ -346,7 +331,7 @@ void slave_code( int world_rank )
         trajectory.dump_dipoles( );
 
         cut_trajectory = trajectory.report_trajectory_status( );
-        if ( cut_trajectory == 1 )
+        if ( cut_trajectory )
         {
             trajectory.dump_dipoles();
             continue;
@@ -366,7 +351,6 @@ void slave_code( int world_rank )
         // Отправляем собранный массив корреляций мастер-процессу
         MPI_Send( &correlation_function[0], CORRELATION_FUNCTION_LENGTH, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD );
         correlation_function.clear();
-
     }
 }
 
