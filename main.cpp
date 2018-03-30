@@ -16,97 +16,7 @@
 
 #include "trajectory.hpp"
 
-unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
-std::mt19937 mcmc_generator{ seed };
-
 const int CORRELATION_FUNCTION_LENGTH = 3000;
-
-const double step = 1.5;
-const double DIM = 6;
-
-const double Racc_max = 60.0;
-const double Racc_min = 2.0;
-
-const double Rint_max = 40.0;
-const double Rint_min = 4.0;
-
-const double MU = 6632.039;
-
-void sample(std::vector<double> const & prev, std::vector<double> & next)
-{
-    std::normal_distribution<double> distribution( 0.0, step );
-    for ( size_t i = 0; i < next.size(); ++i )
-         next[i] = prev[i] + distribution( mcmc_generator );
-}
-
-// порядок перменных: R, pR, theta, pT, phi, pPhi
-double density_( std::vector<double> & x, const double Temperature )
-{
-    double R = x[0];
-    double pR = x[1];
-    double theta = x[2];
-    double pTheta = x[3];
-    // double phi = x[4];
-    double pPhi = x[5];
-
-    double H = std::pow(pR, 2) / (2.0 * MU) + \
-               std::pow(pTheta, 2) / (2.0 * MU * R * R) + \
-               std::pow(pPhi, 2) / (2.0 * MU * R * R * sin(theta) * sin(theta)) + \
-               ar_he_pot(R);
-
-    if ( (H > 0) && (R > Racc_min) && (R < Racc_max) )
-        return exp(- H * constants::HTOJ / (constants::BOLTZCONST * Temperature) );
-    else
-        return 0.0;
-}
-
-std::vector<double> MHA_burnin( int burnin, std::vector<double> x, std::function<double(std::vector<double>&)> density )
-{
-    std::vector<double> xcand(DIM);
-    std::uniform_real_distribution<double> unidistr(0.0, 1.0);
-
-    for (int i = 0; i < burnin; ++i)
-    {
-        sample(x, xcand);
-        double alpha = density(xcand) / density(x);
-
-        if ( unidistr(mcmc_generator) < alpha)
-        {
-            x = xcand;
-        }
-    }
-
-    return x;
-}
-
-// getOutOf -- то количество точек, раз в которое мы выбираем точку,
-// чтобы на ней посчитать интегранд
-std::vector<double> MHA_generate_point(std::vector<double> x, int getOutOf,
-                                       std::function<double(std::vector<double>&)> density)
-{
-    std::vector<double> xcand(DIM);
-    int counter = 1;
-
-    std::uniform_real_distribution<double> unidistr(0.0, 1.0);
-
-    while( true)
-    {
-        sample(x, xcand);
-        double alpha = density(xcand) / density(x);
-
-        if ( unidistr(mcmc_generator) < alpha )
-        {
-            x = xcand;
-        }
-
-        if ( (counter > getOutOf) && (xcand[0] > Rint_min) && (xcand[0] < Rint_max) )
-        {
-            return xcand;
-        }
-
-        ++counter;
-    }
-}
 
 // "интерфейсная" функция. она передается методу GEAR, который
 // осуществляет решение системы дифуров, правая часть которой, задается этой
@@ -168,18 +78,11 @@ void master_code( int world_size )
     // status of calculation
     bool is_finished = false;
 
-    std::function<double(std::vector<double>&)> density = bind( density_, std::placeholders::_1, parameters.Temperature );
-
-    const int burnin = 3e4;
-    std::vector<double> initial_after_burnin = MHA_burnin( burnin, parameters.initial_point, density );
-
-    const int getOutOf = 10;
-    std::vector<double> p = MHA_generate_point( initial_after_burnin, getOutOf, density );
-
     // sending first trajectory
     for ( int i = 1; i < world_size; i++ )
     {
         p = MHA_generate_point( p, getOutOf, density );
+        addPoint( histograms, p );
 
         MPI_Send( &p[0], DIM, MPI_DOUBLE, i, 0, MPI_COMM_WORLD );
         //cout << "(master) sent point " << endl;
@@ -217,6 +120,7 @@ void master_code( int world_size )
             if ( sent <= parameters.NPOINTS )
             {
                 p = MHA_generate_point( p, getOutOf, density );
+                addPoint( histograms, p );
 
                 MPI_Send( &p[0], DIM, MPI_DOUBLE, source, 0, MPI_COMM_WORLD );
                 MPI_Send( &sent, 1, MPI_INT, source, 0, MPI_COMM_WORLD );
@@ -260,6 +164,7 @@ void master_code( int world_size )
         if ( sent < parameters.NPOINTS )
         {
             p = MHA_generate_point( p, getOutOf, density );
+            addPoint( histograms, p );
 
             MPI_Send( &p[0], DIM, MPI_DOUBLE, source, 0, MPI_COMM_WORLD );
             MPI_Send( &sent, 1, MPI_INT, source, 0, MPI_COMM_WORLD );
@@ -302,8 +207,6 @@ void slave_code( int world_rank )
 {
     Parameters parameters;
     FileReader fileReader( "../parameters.in", &parameters );
-
-    MPI_Status status;
 
     int cut_trajectory = 0;
     bool exit_status = false;
@@ -355,15 +258,15 @@ void slave_code( int world_rank )
         dipx_forward = trajectory.get_dipx();
         dipy_forward = trajectory.get_dipy();
         dipz_forward = trajectory.get_dipz();
+
         // после копирования освобождаем эти вектора внутри объекта trajectory
-         trajectory.dump_dipoles( );
+        trajectory.dump_dipoles( );
 
         std::cout << "(" << world_rank << ") Processing " << trajectory.get_trajectory_counter()
                   << " trajectory. npoints = " << dipz_forward.size() << "; time = "
                   << (clock() - start) / (double) CLOCKS_PER_SEC << "s" << std::endl;
 
         calculate_physical_correlation(correlation_function, dipx_forward, dipy_forward, dipz_forward);
-        std::cout << "Mean dipole on trajectory: " << correlation_function[0] << std::endl;
 
         dipx_forward.clear();
         dipy_forward.clear();

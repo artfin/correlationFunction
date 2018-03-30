@@ -1,3 +1,5 @@
+TEMPLATE = SUBDIRS
+
 QT += core
 QT -= gui
 
@@ -21,9 +23,11 @@ SOURCES += main.cpp \
     matrix_he_ar.cpp \
     ar_he_pot_derivative.cpp \
     ar_he_dip_buryak_fit.cpp \
-    fgauss.cpp
+    fgauss.cpp \
+    sampling/metropolis/metropolis.cpp
 
 LIBS += -lmpi -pthread -lmpi_cxx
+LIBS += -lgsl -lgslcblas
 
 HEADERS += \
     awp.hpp \

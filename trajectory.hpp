@@ -46,6 +46,7 @@ public:
     void save_trajectory( std::string filename );
 
     bool receive_initial_conditions( void );
+    double hamiltonian( const double * x );
 
     void set_initial_conditions( std::vector<double>& ic );
     void reverse_initial_conditions( void );

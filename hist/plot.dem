@@ -1,0 +1,9 @@
+#!/usr/bin/gnuplot -persist
+reset
+set term png truecolor
+set output "R.png"
+set xlabel "R"
+set ylabel "density"
+set grid
+set style fill transparent solid 0.5 noborder
+plot "R.txt" using 1:2 with boxes 

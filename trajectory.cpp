@@ -18,6 +18,24 @@ bool Trajectory::receive_initial_conditions( void )
     return false;
 }
 
+double Trajectory::hamiltonian( const double * x )
+{
+    const double MU = 6632.039;
+
+    double R = x[0];
+    double pR = x[1];
+    double theta = x[2];
+    double pTheta = x[3];
+    // double phi = x[4];
+    double pPhi = x[5];
+
+    return std::pow(pR, 2) / (2.0 * MU) + \
+           std::pow(pTheta, 2) / (2.0 * MU * R * R) + \
+           std::pow(pPhi, 2) / (2.0 * MU * R * R * sin(theta) * sin(theta)) + \
+           ar_he_pot(R);
+}
+
+
 void Trajectory::save_trajectory( std::string filename )
 {
     std::ofstream file( filename );
@@ -119,7 +137,7 @@ void Trajectory::run_trajectory( dglsysfnk syst )
             std::cout << "..." << std::endl;
         }
 
-        //std::vector<double> coords{ t0, y0[0], y0[1], y0[2], y0[3] };
+        //std::vector<double> coords{ t0, y0[0], y0[1], y0[2], y0[3], y0[4], y0[5] };
         //trajectory.push_back( coords );
 
         transform_dipole( temp, y0[0], y0[2], y0[4] );
