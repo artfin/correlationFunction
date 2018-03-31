@@ -16,7 +16,10 @@
 
 #include "trajectory.hpp"
 
+const int DIM = 6;
 const int CORRELATION_FUNCTION_LENGTH = 3000;
+
+const double Rint_max = 40.0;
 
 // "интерфейсная" функция. она передается методу GEAR, который
 // осуществляет решение системы дифуров, правая часть которой, задается этой
@@ -64,6 +67,34 @@ void save_correlation_function_debug( std::vector<double> const & v, const std::
     outFile.close();
 }
 
+void read_initial_conditions( std::vector<std::vector<double>> & contents, const std::string filename )
+{
+    std::ifstream inFile(filename);
+    const int MAXLINE = 100;
+    char buf[MAXLINE];
+
+    std::stringstream ss;
+    std::vector<double> temp;
+    double value;
+
+    while ( inFile.getline(buf, MAXLINE) )
+    {
+        ss << buf;
+        for ( int k = 0; k < DIM; ++k )
+        {
+            ss >> value;
+            temp.push_back(value);
+        }
+
+        contents.push_back(temp);
+        temp.clear();
+        ss.clear();
+        ss.str("");
+    }
+
+    inFile.close();
+}
+
 void master_code( int world_size )
 {
     MPI_Status status;
@@ -72,25 +103,33 @@ void master_code( int world_size )
     Parameters parameters;
     FileReader fileReader( "../parameters.in", &parameters );
 
+    std::vector<std::vector<double>> samples;
+    read_initial_conditions(samples, "../samples.txt");
+    std::cout << "Samples len: " << samples.size() << std::endl;
+
+    int samples_counter = 0;
+
     int sent = 0;
     int received = 0;
 
     // status of calculation
     bool is_finished = false;
 
+    std::vector<double> sample;
+
     // sending first trajectory
     for ( int i = 1; i < world_size; i++ )
     {
-        p = MHA_generate_point( p, getOutOf, density );
-        addPoint( histograms, p );
+        sample = samples[samples_counter];
+        ++samples_counter;
 
-        MPI_Send( &p[0], DIM, MPI_DOUBLE, i, 0, MPI_COMM_WORLD );
+        MPI_Send( &sample[0], DIM, MPI_DOUBLE, i, 0, MPI_COMM_WORLD );
         //cout << "(master) sent point " << endl;
 
         MPI_Send( &sent, 1, MPI_INT, i, 0, MPI_COMM_WORLD );
         //cout << "(master) sent number of trajectory" << endl;
 
-        sent++;
+        ++sent;
     }
 
     std::vector<double> correlation_total(CORRELATION_FUNCTION_LENGTH);
@@ -119,10 +158,10 @@ void master_code( int world_size )
             std::cout << "(master) Received cutting trajectory tag!" << std::endl;
             if ( sent <= parameters.NPOINTS )
             {
-                p = MHA_generate_point( p, getOutOf, density );
-                addPoint( histograms, p );
+                sample = samples[samples_counter];
+                ++samples_counter;
 
-                MPI_Send( &p[0], DIM, MPI_DOUBLE, source, 0, MPI_COMM_WORLD );
+                MPI_Send( &sample[0], DIM, MPI_DOUBLE, source, 0, MPI_COMM_WORLD );
                 MPI_Send( &sent, 1, MPI_INT, source, 0, MPI_COMM_WORLD );
                 //cout << "(master) Sent new point" << endl;
 
@@ -148,7 +187,7 @@ void master_code( int world_size )
             save_correlation_function_debug( correlation_total, filenameCorrelationFunction, Volume / received );
         }
 
-        if ( received == parameters.NPOINTS )
+        if ( received == samples.size() )
         {
             for ( size_t k = 0; k < correlation_total.size(); k++ )
             {
@@ -161,12 +200,12 @@ void master_code( int world_size )
             is_finished = true;
         }
 
-        if ( sent < parameters.NPOINTS )
+        if ( sent < samples.size() )
         {
-            p = MHA_generate_point( p, getOutOf, density );
-            addPoint( histograms, p );
+            sample = samples[samples_counter];
+            ++samples_counter;
 
-            MPI_Send( &p[0], DIM, MPI_DOUBLE, source, 0, MPI_COMM_WORLD );
+            MPI_Send( &sample[0], DIM, MPI_DOUBLE, source, 0, MPI_COMM_WORLD );
             MPI_Send( &sent, 1, MPI_INT, source, 0, MPI_COMM_WORLD );
 
             sent++;
