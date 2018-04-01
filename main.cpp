@@ -47,6 +47,7 @@ void syst (REAL t, REAL *y, REAL *f)
     delete [] out;
 }
 
+/*
 void save_correlation_function_final( std::vector<double> const & v, const std::string filename, const double sampling_time )
 {
     double time = 0.0;
@@ -63,6 +64,19 @@ void save_correlation_function_debug( std::vector<double> const & v, const std::
     std::ofstream outFile( filename );
     for ( size_t k = 0; k < v.size(); k++ )
         outFile << v[k] * constant << std::endl;
+
+    outFile.close();
+}
+*/
+
+void save_correlation_function( std::vector<double> const & v, const std::string filename,
+                                const double sampling_time, const double normalizing_constant )
+{
+    std::ofstream outFile(filename);
+
+    double time = 0.0;
+    for ( size_t k = 0; k < v.size(); ++k, time += sampling_time )
+        outFile << time << " " << v[k] * normalizing_constant << std::endl;
 
     outFile.close();
 }
@@ -107,6 +121,9 @@ void master_code( int world_size )
     read_initial_conditions(samples, "../samples.txt");
     std::cout << "Samples len: " << samples.size() << std::endl;
 
+    const int toSave = 50; // размер сохраняемого блока
+    assert( samples.size() % toSave == 0 );
+
     int samples_counter = 0;
 
     int sent = 0;
@@ -135,8 +152,8 @@ void master_code( int world_size )
     std::vector<double> correlation_total(CORRELATION_FUNCTION_LENGTH);
     std::vector<double> correlation_package(CORRELATION_FUNCTION_LENGTH);
 
-    const int toSave = 1000; // раз в какое количество точек сохранять файл
-    std::string filenameCorrelationFunction = "../output/equilibrium_correlation.txt";
+    int filesCounter = 0; // номер файла
+    std::string filenameCorrelationFunction = "../output/eqcorr";
 
     double Volume = 4.0 / 3.0 * M_PI * pow( Rint_max * constants::ALU, 3);
 
@@ -181,26 +198,25 @@ void master_code( int world_size )
         received++;
         //cout << "(master) after all MPI_Recv; received = " << received << endl;
 
-        if ( (received + 1) % toSave == 0 )
+        if ( (received % toSave == 0)  && (received != 0) )
         {
-            std::cout << "(debug) Saving correlation file to " << filenameCorrelationFunction << std::endl;
-            save_correlation_function_debug( correlation_total, filenameCorrelationFunction, Volume / received );
+            std::string filename = filenameCorrelationFunction + std::to_string(filesCounter) + ".txt";
+            ++filesCounter;
+
+            std::cout << "(debug) Saving correlation file to " << filename << std::endl;
+            save_correlation_function( correlation_total, filename,
+                                       parameters.sampling_time * constants::ATU, Volume / toSave );
+            // сохранили блок, обнулили элементы вектора
+            std::fill( correlation_total.begin(), correlation_total.end(), 0.0 );
         }
 
-        if ( received == samples.size() )
+        if ( received == (int) samples.size() )
         {
-            for ( size_t k = 0; k < correlation_total.size(); k++ )
-            {
-                correlation_total[k] *= Volume / received;
-            }
-
-            std::cout << "(final) Saving correlation file to " << filenameCorrelationFunction << std::endl;
-            save_correlation_function_final( correlation_total, filenameCorrelationFunction,
-                                             parameters.sampling_time * constants::ATU );
+            std::cout << "(final) Exiting..." << std::endl;
             is_finished = true;
         }
 
-        if ( sent < samples.size() )
+        if ( sent < (int) samples.size() )
         {
             sample = samples[samples_counter];
             ++samples_counter;
