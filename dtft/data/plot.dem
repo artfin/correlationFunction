@@ -1,9 +1,9 @@
 #!/usr/bin/gnuplot -persist
 reset
 set term png truecolor
-set output "pR.png"
-set xlabel "pR"
-set ylabel "density"
+set output "output.png"
+set xlabel "cm"
+set ylabel "specfunc"
 set grid
 set style fill transparent solid 0.5 noborder
-plot "pr.txt" using 1:2 with boxes 
+plot "output.txt" using 1:2 with boxes 

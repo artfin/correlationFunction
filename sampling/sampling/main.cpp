@@ -213,7 +213,7 @@ int main()
     std::vector<double> initial_after_burnin = MHA_burnin( burnin, initial_point, density );
     std::cout << ">> Burnin is done." << std::endl;
 
-    const int getOutOf = 5e3;
+    const int getOutOf = 1e3;
     std::vector<double> p = MHA_generate_point( initial_after_burnin, getOutOf, density );
 
     // аллокируем гистограммы

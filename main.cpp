@@ -121,7 +121,7 @@ void master_code( int world_size )
     read_initial_conditions(samples, "../samples.txt");
     std::cout << "Samples len: " << samples.size() << std::endl;
 
-    const int toSave = 50; // размер сохраняемого блока
+    const int toSave = 1; // размер сохраняемого блока
     assert( samples.size() % toSave == 0 );
 
     int samples_counter = 0;
@@ -138,6 +138,10 @@ void master_code( int world_size )
     for ( int i = 1; i < world_size; i++ )
     {
         sample = samples[samples_counter];
+        std::cout << "sample: ";
+        for ( int k = 0; k < DIM; ++k )
+            std::cout << sample[k] << " ";
+        std::cout << std::endl;
         ++samples_counter;
 
         MPI_Send( &sample[0], DIM, MPI_DOUBLE, i, 0, MPI_COMM_WORLD );
@@ -159,6 +163,8 @@ void master_code( int world_size )
 
     while( true )
     {
+        std::cout << "(master) cycle beginning" << std::endl;
+
         if ( is_finished )
         {
             for ( int i = 1; i < world_size; i++ )
@@ -169,6 +175,8 @@ void master_code( int world_size )
 
         int msg;
         MPI_Recv( &msg, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status );
+        std::cout << "(master) received msg" << std::endl;
+
         source = status.MPI_SOURCE;
         if ( status.MPI_TAG == tags::TRAJECTORY_CUT_TAG )
         {
@@ -176,6 +184,10 @@ void master_code( int world_size )
             if ( sent <= parameters.NPOINTS )
             {
                 sample = samples[samples_counter];
+                std::cout << "sample: ";
+                for ( int k = 0; k < DIM; ++k )
+                    std::cout << sample[k] << " ";
+                std::cout << std::endl;
                 ++samples_counter;
 
                 MPI_Send( &sample[0], DIM, MPI_DOUBLE, source, 0, MPI_COMM_WORLD );
@@ -187,16 +199,13 @@ void master_code( int world_size )
         }
 
         std::fill( correlation_package.begin(), correlation_package.end(), 0.0 );
-
         MPI_Recv( &correlation_package[0], CORRELATION_FUNCTION_LENGTH, MPI_DOUBLE, source, MPI_ANY_TAG, MPI_COMM_WORLD, &status );
+        std::cout << "(master) received package" << std::endl;
 
         for ( size_t i = 0; i < CORRELATION_FUNCTION_LENGTH; i++ )
-        {
             correlation_total[i] += correlation_package[i];
-        }
 
-        received++;
-        //cout << "(master) after all MPI_Recv; received = " << received << endl;
+        ++received;
 
         if ( (received % toSave == 0)  && (received != 0) )
         {
@@ -205,7 +214,7 @@ void master_code( int world_size )
 
             std::cout << "(debug) Saving correlation file to " << filename << std::endl;
             save_correlation_function( correlation_total, filename,
-                                       parameters.sampling_time * constants::ATU, Volume / toSave );
+                                       parameters.sampling_time * constants::ATU, Volume / received );
             // сохранили блок, обнулили элементы вектора
             std::fill( correlation_total.begin(), correlation_total.end(), 0.0 );
         }
@@ -219,12 +228,18 @@ void master_code( int world_size )
         if ( sent < (int) samples.size() )
         {
             sample = samples[samples_counter];
+            std::cout << "sample: ";
+            for ( int k = 0; k < DIM; ++k )
+                std::cout << sample[k] << " ";
+            std::cout << std::endl;
             ++samples_counter;
 
+            std::cout << "(master) sending initial condition" << std::endl;
             MPI_Send( &sample[0], DIM, MPI_DOUBLE, source, 0, MPI_COMM_WORLD );
             MPI_Send( &sent, 1, MPI_INT, source, 0, MPI_COMM_WORLD );
+            std::cout << "(master) initial condition sent" << std::endl;
 
-            sent++;
+            ++sent;
         }
     }
 }
@@ -272,6 +287,8 @@ void slave_code( int world_rank )
 
     while ( true )
     {
+        std::cout << "(slave) in the beginning of the cycle" << std::endl;
+
         // переменная cut_trajectory играет роль переменной типа bool
         // ( это сделано для того, чтобы переменная могла быть переслана при помощи MPI_Send,
         // нет встроенного типа MPI_BOOL. )
@@ -290,6 +307,8 @@ void slave_code( int world_rank )
         // обсчитывать не надо, то exit_status = true и, соответственно, текущий процесс выходит из бесконечного цикла
         // и прекращает свою работу.
         exit_status = trajectory.receive_initial_conditions( );
+        std::cout << "(slave) received initial condition" << std::endl;
+
         if ( exit_status )
         {
             std::cout << "(" << world_rank << ") exit message is received!" << std::endl;
@@ -298,6 +317,7 @@ void slave_code( int world_rank )
 
         // начинаем расчет траектории
         trajectory.run_trajectory( syst );
+        std::cout << "(slave) traversed trajectory" << std::endl;
 
         // собираем статус траектории. метод отправляет статус траектории мастеру
         // если траектория обрублена, то обнуляем буферы хранения диполя с траектории
@@ -322,6 +342,7 @@ void slave_code( int world_rank )
                   << (clock() - start) / (double) CLOCKS_PER_SEC << "s" << std::endl;
 
         calculate_physical_correlation(correlation_function, dipx_forward, dipy_forward, dipz_forward);
+        std::cout << "(slave) calculated physical correlation" << std::endl;
 
         dipx_forward.clear();
         dipy_forward.clear();
@@ -330,6 +351,7 @@ void slave_code( int world_rank )
         // Отправляем собранный массив корреляций мастер-процессу
         MPI_Send( &correlation_function[0], CORRELATION_FUNCTION_LENGTH, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD );
         correlation_function.clear();
+        std::cout << "(slave) sent physical correlation" << std::endl;
     }
 }
 
