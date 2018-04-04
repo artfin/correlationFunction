@@ -46,7 +46,8 @@ double density_( std::vector<double> & x, const double Temperature )
                std::pow(pPhi, 2) / (2.0 * MU * R * R * sin(theta) * sin(theta)) + \
                ar_he_pot(R);
 
-    if ( (H > 0) && (R > Racc_min) && (R < Racc_max) )
+    // !!!!!!!!!!!!!!!!!!!!!!!!!
+    if ( (H < 0) && (R > Racc_min) && (R < Racc_max) )
         return exp(- H * constants::HTOJ / (constants::BOLTZCONST * Temperature) );
     else
         return 0.0;
@@ -174,7 +175,7 @@ void saveHistograms( std::vector<gsl_histogram*> histograms )
     std::vector<std::string> names = {"r.txt", "pr.txt", "theta.txt", "ptheta.txt", "varphi.txt", "pvarphi.txt"};
     assert( histograms.size() == names.size() );
 
-    std::string folder = "../hist/";
+    std::string folder = "../hist_bound/";
 
     for ( size_t k = 0; k < names.size(); k++ )
         saveHistogram(histograms[k], folder + names[k]);
@@ -227,10 +228,10 @@ int main()
     ranges.emplace_back(-250.0, 250.0); // pVarphi
     allocateHistograms( histograms, ranges, NBINS );
 
-    const int chainLength = 5e4;
+    const int chainLength = 10;
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 
-    std::ofstream out("../samples.txt");
+    std::ofstream out("../samples_bound.txt");
 
     const int blockSize = 1e3;
     std::cout << "[";

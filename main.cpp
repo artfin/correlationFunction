@@ -109,6 +109,13 @@ void read_initial_conditions( std::vector<std::vector<double>> & contents, const
     inFile.close();
 }
 
+void merge( std::vector<double> & full, std::vector<double> & backward, std::vector<double> & forward )
+{
+    full.resize(backward.size() + forward.size());
+    std::reverse_copy(backward.begin(), backward.end(), full.begin());
+    std::copy(forward.begin(), forward.end(), full.begin() + backward.size());
+}
+
 void master_code( int world_size )
 {
     MPI_Status status;
@@ -121,7 +128,7 @@ void master_code( int world_size )
     read_initial_conditions(samples, "../samples.txt");
     std::cout << "Samples len: " << samples.size() << std::endl;
 
-    const int toSave = 1; // размер сохраняемого блока
+    const int toSave = 100; // размер сохраняемого блока
     assert( samples.size() % toSave == 0 );
 
     int samples_counter = 0;
@@ -181,7 +188,7 @@ void master_code( int world_size )
         if ( status.MPI_TAG == tags::TRAJECTORY_CUT_TAG )
         {
             std::cout << "(master) Received cutting trajectory tag!" << std::endl;
-            if ( sent <= parameters.NPOINTS )
+            if ( sent <= (int) samples.size() )
             {
                 sample = samples[samples_counter];
                 std::cout << "sample: ";
@@ -282,7 +289,9 @@ void slave_code( int world_rank )
     bool exit_status = false;
     Trajectory trajectory( parameters );
 
+    std::vector<double> dipx, dipy, dipz;
     std::vector<double> dipx_forward, dipy_forward, dipz_forward;
+    std::vector<double> dipx_backward, dipy_backward, dipz_backward;
     std::vector<double> correlation_function;
 
     while ( true )
@@ -319,15 +328,6 @@ void slave_code( int world_rank )
         trajectory.run_trajectory( syst );
         std::cout << "(slave) traversed trajectory" << std::endl;
 
-        // собираем статус траектории. метод отправляет статус траектории мастеру
-        // если траектория обрублена, то обнуляем буферы хранения диполя с траектории
-        cut_trajectory = trajectory.report_trajectory_status( );
-        if ( cut_trajectory )
-        {
-            trajectory.dump_dipoles();
-            continue;
-        }
-
         // если мы прошли предыдущий блок кода, значит траектория имеет допустимую длину.
         // копируем компоненты дипольного момента вдоль траектории в виде структуры данных vector<double>
         dipx_forward = trajectory.get_dipx();
@@ -337,16 +337,46 @@ void slave_code( int world_rank )
         // после копирования освобождаем эти вектора внутри объекта trajectory
         trajectory.dump_dipoles( );
 
-        std::cout << "(" << world_rank << ") Processing " << trajectory.get_trajectory_counter()
-                  << " trajectory. npoints = " << dipz_forward.size() << "; time = "
-                  << (clock() - start) / (double) CLOCKS_PER_SEC << "s" << std::endl;
+        // Прогоняем обратную траекторию
+        trajectory.reverse_initial_conditions();
 
-        calculate_physical_correlation(correlation_function, dipx_forward, dipy_forward, dipz_forward);
-        std::cout << "(slave) calculated physical correlation" << std::endl;
+        trajectory.run_trajectory( syst );
+        // собираем статус траектории. метод отправляет статус траектории мастеру
+        // если траектория обрублена, то обнуляем буферы хранения диполя с траектории
+        cut_trajectory = trajectory.report_trajectory_status( );
+        if ( cut_trajectory )
+        {
+            trajectory.dump_dipoles();
+            continue;
+        }
+
+        dipx_backward = trajectory.get_dipx();
+        dipy_backward = trajectory.get_dipy();
+        dipz_backward = trajectory.get_dipz();
+        trajectory.dump_dipoles();
+
+        // сливаем диполи с прямой и обратной траектории в одну
+        merge(dipx, dipx_backward, dipx_forward);
+        merge(dipy, dipy_backward, dipy_forward);
+        merge(dipz, dipz_backward, dipz_forward);
 
         dipx_forward.clear();
         dipy_forward.clear();
         dipz_forward.clear();
+        dipx_backward.clear();
+        dipy_backward.clear();
+        dipz_backward.clear();
+
+        std::cout << "(" << world_rank << ") Processing " << trajectory.get_trajectory_counter()
+                  << " trajectory. npoints = " << dipz_forward.size() << "; time = "
+                  << (clock() - start) / (double) CLOCKS_PER_SEC << "s" << std::endl;
+
+        calculate_physical_correlation(correlation_function, dipx, dipy, dipz);
+        std::cout << "(slave) calculated physical correlation" << std::endl;
+
+        dipx.clear();
+        dipy.clear();
+        dipz.clear();
 
         // Отправляем собранный массив корреляций мастер-процессу
         MPI_Send( &correlation_function[0], CORRELATION_FUNCTION_LENGTH, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD );
