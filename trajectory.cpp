@@ -68,21 +68,6 @@ void Trajectory::dump_dipoles( void )
     dipz.clear();
 }
 
-int Trajectory::report_trajectory_status( void )
-{
-    if ( cut_trajectory )
-    {
-        std::cout << "(slave): sending cutting trajectory signal" << std::endl;
-        MPI_Send( &cut_trajectory, 1, MPI_INT, 0, tags::TRAJECTORY_CUT_TAG, MPI_COMM_WORLD );
-    }
-    else
-    {
-        MPI_Send( &cut_trajectory, 1, MPI_INT, 0, tags::TRAJECTORY_FINISHED_TAG, MPI_COMM_WORLD );
-    }
-
-    return cut_trajectory;
-}
-
 void Trajectory::set_initial_conditions( std::vector<double>& ic )
 {
     memcpy( y0, &ic[0], ic.size() * sizeof(double) );
@@ -116,11 +101,7 @@ void Trajectory::run_trajectory( dglsysfnk syst )
     while( y0[0] < parameters.RDIST )
     {
         if ( counter == parameters.MaxTrajectoryLength / 2 )
-        {
-            std::cout << "Trajectory cut!" << std::endl;
-            cut_trajectory = 1;
             break;
-        }
 
         fehler = gear4( &t0, xend, N, syst, y0, epsabs, epsrel, &h, fmax, &aufrufe );
         if ( fehler != 0 )
@@ -129,7 +110,7 @@ void Trajectory::run_trajectory( dglsysfnk syst )
             break;
         }
 
-        //std::vector<double> coords{ t0, y0[0], y0[1], y0[2], y0[3], y0[4], y0[5] };
+        //std::vector<double> coords{ t0, y0[0], y0[1], y0[2], y0[3], y0[4], y0[5], ar_he_dip_buryak_fit(y0[0]) };
         //trajectory.push_back( coords );
 
         transform_dipole( temp, y0[0], y0[2], y0[4] );

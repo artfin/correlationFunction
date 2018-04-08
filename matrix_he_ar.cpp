@@ -1,8 +1,10 @@
 #include "matrix_he_ar.hpp"
+#include <iostream>
 
 void transform_dipole( std::vector<double> & res, const double R, const double theta, const double phi )
 {
     double dipz = ar_he_dip_buryak_fit( R );
+
     res[0] = dipz * std::sin(theta) * std::cos(phi);
     res[1] = dipz * std::sin(theta) * std::sin(phi);
     res[2] = dipz * std::cos(theta);

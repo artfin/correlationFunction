@@ -1,9 +1,40 @@
 #!/usr/bin/gnuplot -persist
 reset
+set print "-"
+
 set term png truecolor
-set output "pR.png"
-set xlabel "pR"
 set ylabel "density"
 set grid
 set style fill transparent solid 0.5 noborder
+
+set output "pR.png"
+set xlabel "pR"
 plot "pr.txt" using 1:2 with boxes 
+print "Created pR.png" 
+
+set output "R.png"
+set xlabel "R"
+plot "r.txt" using 1:2 with boxes
+print "Created R.png"
+
+set output "pTheta.png"
+set xlabel "pTheta"
+plot "ptheta.txt" using 1:2 with boxes
+print "Created pTheta.png"
+
+set output "pPhi.png"
+set xlabel "pPhi"
+plot "pvarphi.txt" using 1:2 with boxes
+print "Created pPhi.png"
+
+set output "theta.png"
+set xlabel "theta"
+set yrange [0:1]
+plot "theta.txt" using 1:2 with boxes
+print "Created theta.png"
+
+set output "varphi.png"
+set xlabel "varphi"
+set yrange [0:1]
+plot "varphi.txt" using 1:2 with boxes
+print "Created varphi.png"

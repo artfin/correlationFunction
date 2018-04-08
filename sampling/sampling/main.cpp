@@ -6,21 +6,24 @@
 #include <chrono>
 #include <vector>
 #include <cassert>
+
 #include "ar_he_pot.hpp"
+#include "ar_he_dip_buryak_fit.hpp"
+
 #include "constants.hpp"
 
 unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
 std::mt19937 mcmc_generator{ seed };
 
-const double step = 2.5;
+const double step = 2.7;
 const double DIM = 6;
 const int NBINS = 100;
 
-const double Racc_max = 41.0;
-const double Racc_min = 2.0;
+const double Racc_max = 25.0;
+const double Racc_min = 3.0;
 
-const double Rint_max = 40.0;
-const double Rint_min = 4.0;
+const double Rint_max = 25.0;
+const double Rint_min = 3.0;
 
 const double MU = 6632.039;
 
@@ -46,8 +49,7 @@ double density_( std::vector<double> & x, const double Temperature )
                std::pow(pPhi, 2) / (2.0 * MU * R * R * sin(theta) * sin(theta)) + \
                ar_he_pot(R);
 
-    // !!!!!!!!!!!!!!!!!!!!!!!!!
-    if ( (H < 0) && (R > Racc_min) && (R < Racc_max) )
+    if ( (H > 0) && (R > Racc_min) && (R < Racc_max) )
         return exp(- H * constants::HTOJ / (constants::BOLTZCONST * Temperature) );
     else
         return 0.0;
@@ -175,7 +177,7 @@ void saveHistograms( std::vector<gsl_histogram*> histograms )
     std::vector<std::string> names = {"r.txt", "pr.txt", "theta.txt", "ptheta.txt", "varphi.txt", "pvarphi.txt"};
     assert( histograms.size() == names.size() );
 
-    std::string folder = "../hist_bound/";
+    std::string folder = "../hist/";
 
     for ( size_t k = 0; k < names.size(); k++ )
         saveHistogram(histograms[k], folder + names[k]);
@@ -209,7 +211,7 @@ int main()
 
     std::function<double(std::vector<double>&)> density = bind( density_, std::placeholders::_1, 295.0 );
 
-    const int burnin = 3e4;
+    const int burnin = 5e4;
     std::vector<double> initial_point = {6.0, 0.0, 1.2, 0.0, 0.0, 0.0 };
     std::vector<double> initial_after_burnin = MHA_burnin( burnin, initial_point, density );
     std::cout << ">> Burnin is done." << std::endl;
@@ -220,7 +222,7 @@ int main()
     // аллокируем гистограммы
     std::vector<gsl_histogram*> histograms;
     std::vector<std::pair<double, double>> ranges;
-    ranges.emplace_back(4.0, 40.0); // R
+    ranges.emplace_back(3.0, 25.0); // R
     ranges.emplace_back(-12.0, 12.0); // pR
     ranges.emplace_back(0.0, M_PI); // theta
     ranges.emplace_back(-250.0, 250.0); // pTheta
@@ -228,10 +230,12 @@ int main()
     ranges.emplace_back(-250.0, 250.0); // pVarphi
     allocateHistograms( histograms, ranges, NBINS );
 
-    const int chainLength = 10;
+    const int chainLength = 1e4;
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 
-    std::ofstream out("../samples_bound.txt");
+    std::ofstream out("../samples_25.txt");
+
+    double mean_dipole_square = 0.0;
 
     const int blockSize = 1e3;
     std::cout << "[";
@@ -240,6 +244,8 @@ int main()
         p = MHA_generate_point( p, getOutOf, density );
         addPoint(histograms, p);
 
+        mean_dipole_square += ar_he_dip_buryak_fit(p[0]) * ar_he_dip_buryak_fit(p[0]);
+
         for ( int k = 0; k < DIM; ++k )
             out << p[k] << " ";
         out << std::endl;
@@ -247,8 +253,16 @@ int main()
         if ( (k % blockSize == 0) == 0 )
             show_progress((double) k / chainLength);
     }
-
     out.close();
+
+    std::cout << "--------------------------------------" << std::endl;
+    std::cout << "Results of averaging dipole on Chain: " << std::endl;
+    mean_dipole_square /= chainLength;
+    std::cout << "mean_dipole_square = " << mean_dipole_square << std::endl;
+
+    double Volume = 4.0 / 3.0 * M_PI * std::pow(Rint_max - Rint_min, 3.0) * std::pow(constants::ALU, 3.0);
+    std::cout << "mean_dipole_square * Volume = " << mean_dipole_square * Volume << std::endl;
+    std::cout << "--------------------------------------" << std::endl;
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     std::cout << "Time elapsed: "
