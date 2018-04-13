@@ -15,7 +15,7 @@
 unsigned int seed = std::chrono::system_clock::now().time_since_epoch().count();
 std::mt19937 mcmc_generator{ seed };
 
-const double step = 2.7;
+const double step = 3.0;
 const double DIM = 6;
 const int NBINS = 100;
 
@@ -30,8 +30,11 @@ const double MU = 6632.039;
 void sample(std::vector<double> const & prev, std::vector<double> & next)
 {
     std::normal_distribution<double> distribution( 0.0, step );
-    for ( size_t i = 0; i < next.size(); ++i )
-         next[i] = prev[i] + distribution( mcmc_generator );
+
+    int ncoord = rand() % (int) DIM;
+    next[ncoord] = prev[ncoord] + distribution( mcmc_generator );
+    //for ( size_t i = 0; i < next.size(); ++i )
+    //     next[i] = prev[i] + distribution( mcmc_generator );
 }
 
 // порядок перменных: R, pR, theta, pT, phi, pPhi
@@ -46,7 +49,7 @@ double density_( std::vector<double> & x, const double Temperature )
 
     double H = std::pow(pR, 2) / (2.0 * MU) + \
                std::pow(pTheta, 2) / (2.0 * MU * R * R) + \
-               std::pow(pPhi, 2) / (2.0 * MU * R * R * sin(theta) * sin(theta)) + \
+               std::pow(pPhi, 2) / (2.0 * MU * R * R * std::sin(theta) * std::sin(theta)) + \
                ar_he_pot(R);
 
     if ( (H > 0) && (R > Racc_min) && (R < Racc_max) )
