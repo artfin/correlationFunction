@@ -9,7 +9,7 @@ $trajectory
 	% sampling_time = 20.67068666828068
     sampling_time = 200
 
-    MaxTrajectoryLength = 2000
+    MaxTrajectoryLength = 50
 	FREQ_MAX = 700.0
 $end
 

@@ -5,5 +5,8 @@ set output "output.png"
 set xlabel "cm"
 set ylabel "specfunc"
 set grid
+set logscale y
+set xrange [0:600]
+set yrange [1.25e-48 : 1.25e-46]
 set style fill transparent solid 0.5 noborder
-plot "output.txt" using 1:2 with boxes 
+plot "output.txt" using 1:2 with lines 

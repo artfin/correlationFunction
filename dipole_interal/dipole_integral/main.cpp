@@ -21,7 +21,7 @@ const double MU = 6632.039;
 
 // ------------------------------------------------------
 // расстояние, вплоть до которого ведется интегрирование
-const double Rint_min = 3.0; // a0
+const double Rint_min = 4.0; // a0
 const double Rint_max = 25.0; // a0
 // ------------------------------------------------------
 
@@ -50,7 +50,7 @@ double integrand_(hep::mc_point<double> const& x, double Temperature, bool numer
         return 0.0;
 
 
-    if ( h < 0 )
+    if ( h > 0 )
     {
         double jacR = M_PI / 2.0 * (1.0 + std::pow(R, 2.0));
         double jacTheta = M_PI;
@@ -59,7 +59,7 @@ double integrand_(hep::mc_point<double> const& x, double Temperature, bool numer
         double jacpTheta = M_PI * (1.0 + std::pow(pTheta, 2.0));
         double jacpPhi = M_PI * (1.0 + std::pow(pPhi, 2.0));
 
-        // оба интеграла по области h < 0
+        // оба интеграла по области h > 0
         // в числителе стоит интеграл \mu^2 \exp(-H/kT)
         if ( numerator )
         {
@@ -92,7 +92,7 @@ int main()
 
     auto results = hep::vegas(
        hep::make_integrand<double>(num_integrand, 6),
-       std::vector<std::size_t>(10, 5e5)
+       std::vector<std::size_t>(10, 1e6)
      );
 
     auto result = hep::cumulative_result0(results.begin() + 1, results.end());
@@ -104,7 +104,7 @@ int main()
 
     results = hep::vegas(
          hep::make_integrand<double>(denom_integrand, 6),
-         std::vector<std::size_t>(10, 5e5)
+         std::vector<std::size_t>(10, 1e6)
                 );
 
     result = hep::cumulative_result0(results.begin() + 1, results.end());
@@ -118,7 +118,7 @@ int main()
 
     std::cout << "int mu^2 exp(-H/kT) / int exp(-H/kT) = " << numerator / denominator << std::endl;
 
-    double Volume = 4.0 / 3.0 * M_PI * std::pow(Rint_max - Rint_min, 3.0) * std::pow(ALU, 3);
+    double Volume = 4.0 / 3.0 * M_PI * std::pow(Rint_max, 3.0) * std::pow(ALU, 3);
 
     std::cout << " int/int x Volume = " << numerator / denominator * Volume << std::endl;
 

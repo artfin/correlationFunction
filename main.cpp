@@ -59,7 +59,8 @@ void save_correlation_function( std::vector<double> const & v, const std::string
     outFile.close();
 }
 
-void read_initial_conditions( std::vector<std::vector<double>> & contents, const std::string filename )
+void read_initial_conditions( std::vector<std::vector<double>> & contents, const std::string filename,
+                              int lines_to_read = -1 )
 {
     std::ifstream inFile(filename);
     const int MAXLINE = 100;
@@ -69,6 +70,7 @@ void read_initial_conditions( std::vector<std::vector<double>> & contents, const
     std::vector<double> temp;
     double value;
 
+    int lines_counter = 0;
     while ( inFile.getline(buf, MAXLINE) )
     {
         ss << buf;
@@ -78,10 +80,15 @@ void read_initial_conditions( std::vector<std::vector<double>> & contents, const
             temp.push_back(value);
         }
 
+        if ( lines_counter == lines_to_read )
+            break;
+
         contents.push_back(temp);
         temp.clear();
         ss.clear();
         ss.str("");
+
+        ++lines_counter;
     }
 
     inFile.close();
@@ -103,10 +110,11 @@ void master_code( int world_size )
     FileReader fileReader( "../parameters.in", &parameters );
 
     std::vector<std::vector<double>> samples;
-    read_initial_conditions(samples, "../initial_points.txt");
+    const int samples_to_read = 100000;
+    read_initial_conditions(samples, "../initial_points_100000.txt", samples_to_read);
     std::cout << "Samples len: " << samples.size() << std::endl;
 
-    const int toSave = 100; // размер сохраняемого блока
+    const int toSave = 1000; // размер сохраняемого блока
     assert( samples.size() % toSave == 0 );
 
     int samples_counter = 0;
@@ -123,10 +131,6 @@ void master_code( int world_size )
     for ( int i = 1; i < world_size; i++ )
     {
         sample = samples[samples_counter];
-        std::cout << "sample: ";
-        for ( int k = 0; k < DIM; ++k )
-            std::cout << sample[k] << " ";
-        std::cout << std::endl;
         ++samples_counter;
 
         MPI_Send( &sample[0], DIM, MPI_DOUBLE, i, 0, MPI_COMM_WORLD );
@@ -146,7 +150,9 @@ void master_code( int world_size )
     std::string filenameCorrelationFunction = "../output/eqcorr";
 
     double Volume = 4.0 / 3.0 * M_PI * pow( Rint_max * constants::ALU, 3);
-    std::cout << "Volume: " << Volume << std::endl;
+
+    int total_points = 0;
+    int traj_len = 0;
 
     while( true )
     {
@@ -163,7 +169,9 @@ void master_code( int world_size )
         std::fill( correlation_package.begin(), correlation_package.end(), 0.0 );
         MPI_Recv( &correlation_package[0], CORRELATION_FUNCTION_LENGTH, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status );
         source = status.MPI_SOURCE;
-        std::cout << "(master) received package" << std::endl;
+
+        MPI_Recv( &traj_len, 1, MPI_INT, source, MPI_ANY_TAG, MPI_COMM_WORLD, &status );
+        total_points += traj_len;
 
         for ( size_t i = 0; i < CORRELATION_FUNCTION_LENGTH; i++ )
         {
@@ -171,6 +179,7 @@ void master_code( int world_size )
             correlation_block[i] += correlation_package[i];
         }
         ++received;
+
 
         if ( (received % toSave == 0)  && (received != 0) )
         {
@@ -192,6 +201,7 @@ void master_code( int world_size )
             save_correlation_function( correlation_total, filename,
                                        parameters.sampling_time * constants::ATU, Volume / received );
 
+            std::cout << "(final) Total points (on trajectories): " << total_points << std::endl;
             std::cout << "(final) Exiting..." << std::endl;
             is_finished = true;
         }
@@ -201,10 +211,8 @@ void master_code( int world_size )
             sample = samples[samples_counter];
             ++samples_counter;
 
-            //std::cout << "(master) sending initial condition" << std::endl;
             MPI_Send( &sample[0], DIM, MPI_DOUBLE, source, 0, MPI_COMM_WORLD );
             MPI_Send( &sent, 1, MPI_INT, source, 0, MPI_COMM_WORLD );
-            //std::cout << "(master) initial condition sent" << std::endl;
 
             ++sent;
         }
@@ -248,15 +256,13 @@ void slave_code( int world_rank )
     bool exit_status = false;
     Trajectory trajectory( parameters );
 
-    std::vector<double> dipx, dipy, dipz;
     std::vector<double> dipx_forward, dipy_forward, dipz_forward;
-    std::vector<double> dipx_backward, dipy_backward, dipz_backward;
     std::vector<double> correlation_function;
+
+    int trajectory_len;
 
     while ( true )
     {
-        //std::cout << "(slave) in the beginning of the cycle" << std::endl;
-
         std::clock_t start = clock();
 
         // реализуем MPI получение начальных условий и запись их в private элементы объекта класса Trajectory
@@ -264,7 +270,6 @@ void slave_code( int world_rank )
         // обсчитывать не надо, то exit_status = true и, соответственно, текущий процесс выходит из бесконечного цикла
         // и прекращает свою работу.
         exit_status = trajectory.receive_initial_conditions( );
-        //std::cout << "(slave) received initial condition" << std::endl;
 
         if ( exit_status )
         {
@@ -274,7 +279,6 @@ void slave_code( int world_rank )
 
         // начинаем расчет траектории
         trajectory.run_trajectory( syst );
-        //std::cout << "(slave) traversed trajectory" << std::endl;
 
         // если мы прошли предыдущий блок кода, значит траектория имеет допустимую длину.
         // копируем компоненты дипольного момента вдоль траектории в виде структуры данных vector<double>
@@ -285,47 +289,17 @@ void slave_code( int world_rank )
         // после копирования освобождаем эти вектора внутри объекта trajectory
         trajectory.dump_dipoles( );
 
-        /*
-        // Прогоняем обратную траекторию
-        trajectory.reverse_initial_conditions();
-
-        trajectory.run_trajectory( syst );
-
-        dipx_backward = trajectory.get_dipx();
-        dipy_backward = trajectory.get_dipy();
-        dipz_backward = trajectory.get_dipz();
-        trajectory.dump_dipoles();
-
-        // сливаем диполи с прямой и обратной траектории в одну
-        merge(dipx, dipx_backward, dipx_forward);
-        merge(dipy, dipy_backward, dipy_forward);
-        merge(dipz, dipz_backward, dipz_forward);
-
-        dipx_forward.clear();
-        dipy_forward.clear();
-        dipz_forward.clear();
-        dipx_backward.clear();
-        dipy_backward.clear();
-        dipz_backward.clear();
-        */
-
         std::cout << "(" << world_rank << ") Processing " << trajectory.get_trajectory_counter()
                   << " trajectory. npoints = " << dipz_forward.size() << "; time = "
                   << (clock() - start) / (double) CLOCKS_PER_SEC << "s" << std::endl;
 
         calculate_physical_correlation(correlation_function, dipx_forward, dipy_forward, dipz_forward);
-        //std::cout << "(slave) calculated physical correlation" << std::endl;
-
-        /*
-        dipx.clear();
-        dipy.clear();
-        dipz.clear();
-        */
 
         // Отправляем собранный массив корреляций мастер-процессу
         MPI_Send( &correlation_function[0], CORRELATION_FUNCTION_LENGTH, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD );
+        trajectory_len = (int) dipz_forward.size();
+        MPI_Send( &trajectory_len, 1, MPI_INT, 0, 0, MPI_COMM_WORLD );
         correlation_function.clear();
-        //std::cout << "(slave) sent physical correlation" << std::endl;
 
         dipx_forward.clear();
         dipy_forward.clear();
