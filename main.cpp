@@ -110,8 +110,8 @@ void master_code( int world_size )
     FileReader fileReader( "../parameters.in", &parameters );
 
     std::vector<std::vector<double>> samples;
-    const int samples_to_read = 100000;
-    read_initial_conditions(samples, "../initial_points_100000.txt", samples_to_read);
+    const int samples_to_read = 5000;
+    read_initial_conditions(samples, "../initial_points_30000.txt", samples_to_read);
     std::cout << "Samples len: " << samples.size() << std::endl;
 
     const int toSave = 1000; // размер сохраняемого блока
@@ -233,6 +233,17 @@ void calculate_physical_correlation( std::vector<double> & physical_correlation,
     // подготавливает вектор нужного размера, заполняет его элементы нулями
     physical_correlation.resize( CORRELATION_FUNCTION_LENGTH );
 
+    // без трюка
+    /*
+    for ( int n = 0; n < max_size; ++n )
+    {
+        physical_correlation[n] = dipx[0] * dipx[n] + \
+                                  dipy[0] * dipy[n] + \
+                                  dipz[0] * dipz[n];
+    }
+    */
+
+    // с трюком
     double res = 0;
     for ( int n = 0; n < max_size; n++ )
     {
@@ -256,7 +267,10 @@ void slave_code( int world_rank )
     bool exit_status = false;
     Trajectory trajectory( parameters );
 
+    std::vector<double> dipx_backward, dipy_backward, dipz_backward;
     std::vector<double> dipx_forward, dipy_forward, dipz_forward;
+    std::vector<double> dipx, dipy, dipz;
+
     std::vector<double> correlation_function;
 
     int trajectory_len;
@@ -289,21 +303,39 @@ void slave_code( int world_rank )
         // после копирования освобождаем эти вектора внутри объекта trajectory
         trajectory.dump_dipoles( );
 
+        trajectory.reverse_initial_conditions();
+
+        trajectory.run_trajectory( syst );
+
+        dipx_backward = trajectory.get_dipx();
+        dipy_backward = trajectory.get_dipy();
+        dipz_backward = trajectory.get_dipz();
+
+        trajectory.dump_dipoles();
+
+        merge(dipx, dipx_backward, dipx_forward);
+        merge(dipy, dipy_backward, dipy_forward);
+        merge(dipz, dipz_backward, dipz_forward);
+
+        dipx_backward.clear(); dipx_forward.clear();
+        dipy_backward.clear(); dipy_forward.clear();
+        dipz_backward.clear(); dipz_forward.clear();
+
         std::cout << "(" << world_rank << ") Processing " << trajectory.get_trajectory_counter()
-                  << " trajectory. npoints = " << dipz_forward.size() << "; time = "
+                  << " trajectory. npoints = " << dipz.size() << "; time = "
                   << (clock() - start) / (double) CLOCKS_PER_SEC << "s" << std::endl;
 
-        calculate_physical_correlation(correlation_function, dipx_forward, dipy_forward, dipz_forward);
+        calculate_physical_correlation(correlation_function, dipx, dipy, dipz);
 
         // Отправляем собранный массив корреляций мастер-процессу
         MPI_Send( &correlation_function[0], CORRELATION_FUNCTION_LENGTH, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD );
-        trajectory_len = (int) dipz_forward.size();
+        trajectory_len = (int) dipz.size();
         MPI_Send( &trajectory_len, 1, MPI_INT, 0, 0, MPI_COMM_WORLD );
         correlation_function.clear();
 
-        dipx_forward.clear();
-        dipy_forward.clear();
-        dipz_forward.clear();
+        dipx.clear();
+        dipy.clear();
+        dipz.clear();
     }
 }
 

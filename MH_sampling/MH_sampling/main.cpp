@@ -8,6 +8,7 @@
 #include <fstream>
 #include <vector>
 #include <chrono>
+#include <string>
 
 #include "ar_he_dip_buryak_fit.hpp"
 #include "ar_he_pes.hpp"
@@ -48,25 +49,24 @@ void sample( std::vector<double> const & prev, std::vector<double> & next )
     next[4] = prev[4] + distribution_angles( generator );
     next[5] = prev[5] + distribution_angles( generator );
     */
-
     // ----------------------------------------------------
-    // ATMCMC -- https://arxiv.org/pdf/1408.6667.pdf
+    // ATMCMC -- https://arxiv.org/pdf/1408.6667.pdf ФИГНЯ?
+    /*
     std::uniform_real_distribution<double> unidistr(0.0, 1.0);
 
     // proposal distribution
-    std::normal_distribution<double> q(0.0, 3.5);
+    std::normal_distribution<double> q(0.0, 2.0);
     double epsilon = q(generator);
 
     for ( int i = 0; i < dim; ++i )
         next[i] = prev[i] + epsilon * unidistr(generator);
+    */
     // ----------------------------------------------------
 
     // Same gaussian for each direction
-    /*
     std::normal_distribution<double> distribution_gen(0.0, 1.5);
     for (int i = 0; i < dim; ++i)
         next[i] = prev[i] + distribution_gen( generator );
-    */
 }
 
 double integrand(const double x)
@@ -95,7 +95,7 @@ double map_ang(double ang, double lim)
     return fmod(lim + fmod(ang,lim), lim);
 }
 
-void MHA(const int burnin, const int chain_length, std::vector<double> & curr )
+double MHA(const int burnin, const int chain_length, std::vector<double> & curr, std::string const & filename )
 {
     std::vector<double> xcand(dim);
 
@@ -121,7 +121,7 @@ void MHA(const int burnin, const int chain_length, std::vector<double> & curr )
     double integral = 0.0;
     double mean = 0.0, d;
 
-    std::ofstream out("../initial_points.txt");
+    std::ofstream out(filename);
 
     int iterations = 0;
     for ( ; integral_counter < chain_length ; ++iterations )
@@ -157,19 +157,36 @@ void MHA(const int burnin, const int chain_length, std::vector<double> & curr )
     }
 
     double integral_value = integral/integral_counter * VOLUME;
-    printf("The percentage of accepted: %f\n", accepted / (double) iterations * 100.0 );
-    std::cout << "Dipole mean * Volume: " << integral_value << std::endl;
+
+    std::cout << "Percentage of accepted: " << accepted / (double) iterations * 100.0 << std::endl;
+    // std::cout << "Dipole mean * Volume: " << integral_value << std::endl;
+
+    return integral_value;
 }
 
 int main()
 {
     std::vector<double> x0{0.0, 0.0, 7.0, 0.0, 0.0, 0.0};
 
+    const std::string filename = "../initial_points_100000.txt";
     const int burnin = 3e4;
-    const int chain_len = 5e4;
+    const int chain_len = 1e5;
 
-    MHA(burnin, chain_len, x0);
+    auto start = std::clock();
 
+    const int ncycles = 1;
+    std::vector<double> vals(ncycles);
+    for ( int i = 0; i < ncycles; ++i )
+        vals[i] = MHA(burnin, chain_len, x0, filename);
+
+    double mean =std::accumulate(vals.begin(), vals.end(), 0.0) / vals.size();
+    std::cout << "Mean value: " << mean << std::endl;
+
+    double sq_sum = std::inner_product(vals.begin(), vals.end(), vals.begin(), 0.0);
+    double stdev = std::sqrt(sq_sum / vals.size() - mean * mean);
+    std::cout << "Standard deviation: " << stdev << std::endl;
+
+    std::cout << "Time elapsed: " << (std::clock() - start) / (double) CLOCKS_PER_SEC << " s" << std::endl;
 
     return 0;
 }
