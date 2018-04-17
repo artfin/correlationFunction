@@ -168,9 +168,9 @@ int main()
 {
     std::vector<double> x0{0.0, 0.0, 7.0, 0.0, 0.0, 0.0};
 
-    const std::string filename = "../test_1000.txt";
+    const std::string filename = "../initial_points_200000.txt";
     const int burnin = 5e4;
-    const int chain_len = 1000;
+    const int chain_len = 2e5;
 
     auto start = std::clock();
 
