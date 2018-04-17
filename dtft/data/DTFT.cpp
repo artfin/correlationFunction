@@ -47,7 +47,6 @@ double integrate(double omega, double * time, double * corr_val, int N)
 {
 	double int_val = 0.0;
 	double step = (time[N-1] - time[0])/N;
-	std::cout << "step: " << step << std::endl;
 
 	for (int i = 1; i < N-1; i+=2)
 	{
@@ -55,37 +54,33 @@ double integrate(double omega, double * time, double * corr_val, int N)
 					4*integrand(time[i], corr_val[i], omega) +
 					integrand(time[i+1], corr_val[i+1], omega);
 	}
-	std::cout << "integral: " << int_val << std::endl;
+	
 	int_val *= step/3.0;
 	return int_val/2.0/M_PI;
 }
 
-
-
-int main(int argc, char const *argv[])
+int main( )
 {
-	int Npoints = 180*2-1;
+	int Npoints = 3000*2-1;
 	double * time = new double[Npoints];
 	double * correlation = new double[Npoints];
 
-	FILE * fp = fopen("danila_sym.txt","r");
-	FILE * out = fopen("danila_specfunc.txt","w");
-	FILE * spectrum = fopen("danila_spectrum.txt","w");
+	FILE * fp = fopen("symm.txt","r");
+	FILE * out = fopen("specfunc.txt","w");
+	FILE * spectrum = fopen("spectrum.txt","w");
 	reader(fp, time, correlation, Npoints);
 
 	int Nomega = 200;
 	double omega0  = 0.0;
 	double omegastep = 800.0/Nomega;
 
-	//double specfun[Nomega];
 	double spfunval;
 	double specval;
+	
 	for (int i = 0; i < Nomega; ++i)
 	{
 		spfunval = integrate(omega0, time, correlation, Npoints);
-		std::cout << "omega: " << omega0 << "; spfunval: " << spfunval << std::endl;
 		fprintf(out, "%f  %e\n", omega0, spfunval);
-		//specfun[i] = spfunval;
 
 		specval = pow(2*M_PI,3.0)*NL*NL/3.0/hbar*omega0*(1-exp(-2*0.7193875*omega0/295.0))*spfunval;
 		fprintf(spectrum, "%f  %e\n", omega0, specval);
@@ -98,6 +93,6 @@ int main(int argc, char const *argv[])
 
 	delete [] time;
 	delete [] correlation;
-	system("pause");
+	
 	return 0;
 }

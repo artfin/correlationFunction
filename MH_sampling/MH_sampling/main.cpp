@@ -170,9 +170,9 @@ int main()
 {
     std::vector<double> x0{0.0, 0.0, 7.0, 0.0, 0.0, 0.0};
 
-    const std::string filename = "../initial_points_zimm_50000.txt";
+    const std::string filename = "../initial_points_zimm_500000.txt";
     const int burnin = 1e5;
-    const int chain_len = 5e4;
+    const int chain_len = 5e5;
 
     auto start = std::clock();
 
