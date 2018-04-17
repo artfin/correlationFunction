@@ -135,7 +135,7 @@ double MHA(const int burnin, const int chain_length, std::vector<double> & curr,
             ++accepted;
         }
 
-        if (iterations % 50 == 0)
+        if (iterations % 20 == 0)
         {
             if ( (curr[2] > Rint_min) && (curr[2] < Rint_max) )
             {
@@ -168,9 +168,9 @@ int main()
 {
     std::vector<double> x0{0.0, 0.0, 7.0, 0.0, 0.0, 0.0};
 
-    const std::string filename = "../initial_points_100000.txt";
-    const int burnin = 3e4;
-    const int chain_len = 1e5;
+    const std::string filename = "../test_1000.txt";
+    const int burnin = 5e4;
+    const int chain_len = 1000;
 
     auto start = std::clock();
 

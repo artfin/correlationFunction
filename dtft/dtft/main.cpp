@@ -47,7 +47,9 @@ double integrate_simpson(double omega, std::vector<std::pair<double, double>> co
         integral += integrand(input[i - 1].first, input[i - 1].second, omega) +
                     4 * integrand(input[i].first, input[i].second, omega) +
                     integrand(input[i + 1].first, input[i + 1].second, omega);
+
     }
+    std::cout << "integral: " << integral << std::endl;
 
     integral *= step / 3.0;
     return integral;
@@ -112,8 +114,14 @@ int main( )
         double specfunc = integrate_simpson(omega0, input);
         outFile << omega0 << " " << specfunc << std::endl;
 
-        double spectrum = std::pow(2.0 * M_PI, 3.0) * std::pow(constants::LOSHMIDT_CONSTANT, 2) / 3.0 / constants::PLANCKCONST_REDUCED \
-                * omega0 * (1 - std::exp(- 2 * 0.7193875 * omega0 / Temperature)) * specfunc;
+        double spectrum = std::pow(2*M_PI,3.0)*constants::LOSHMIDT_CONSTANT*constants::LOSHMIDT_CONSTANT/3.0/ \
+                constants::PLANCKCONST*omega0*(1-exp(-2*0.7193875*omega0/295.0))*specfunc;
+
+        //double spectrum = std::pow(2.0 * M_PI, 3.0) * std::pow(constants::LOSHMIDT_CONSTANT, 2) / 3.0 / constants::PLANCKCONST_REDUCED \
+        //        * std::pow(10.0, -2.0) * omega0 * (1 - std::exp(- 2 * 0.7193875 * omega0 / Temperature)) * specfunc;
+
+        // 1/c * (c*omega0) = 10**(-2) * omega0
+        // omega0 -- в cm^-1, а для соблюдения размерности формулы должна быть в Hz => переводной коэффициент "c" сокращается
 
         specFile << omega0 << " " << spectrum << std::endl;
 

@@ -41,6 +41,7 @@ namespace constants
     const double PLANCKCONST = 6.626070040 * 1E-34;
     const double PLANCKCONST_REDUCED = 1.054571800 *1E-34;
 
+    // loshmidt constant in m^-3
     const double LOSHMIDT_CONSTANT = 2.6867774 * 1E25;
     // loshmidt constant in cm^-3
     const double LOSHMIDT_CONSTANT_CM = 2.6867774 * 1E19;
