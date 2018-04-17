@@ -111,7 +111,7 @@ void master_code( int world_size )
 
     std::vector<std::vector<double>> samples;
     const int samples_to_read = 1000;
-    read_initial_conditions(samples, "../test_1000.txt", samples_to_read);
+    read_initial_conditions(samples, "../initial_points_zimm_50000.txt", samples_to_read);
     std::cout << "Samples len: " << samples.size() << std::endl;
 
     const int toSave = 1000; // размер сохраняемого блока
@@ -187,8 +187,10 @@ void master_code( int world_size )
             ++filesCounter;
 
             std::cout << "(debug) Saving correlation file to " << filename << std::endl;
+            //save_correlation_function( correlation_block, filename,
+            //                          parameters.sampling_time * constants::ATU, Volume / toSave );
             save_correlation_function( correlation_block, filename,
-                                      parameters.sampling_time * constants::ATU, Volume / toSave );
+                                       parameters.sampling_time * constants::ATU, 1.0 / toSave );
 
             // обнуляем блок
             std::fill( correlation_block.begin(), correlation_block.end(), 0.0 );
@@ -198,8 +200,11 @@ void master_code( int world_size )
         {
             std::string filename = filenameCorrelationFunction + "_final.txt";
             std::cout << "(final) Saving final correlation to " << filename << std::endl;
+            //save_correlation_function( correlation_total, filename,
+            //                           parameters.sampling_time * constants::ATU, Volume / received );
             save_correlation_function( correlation_total, filename,
-                                       parameters.sampling_time * constants::ATU, Volume / received );
+                                       parameters.sampling_time * constants::ATU, 1.0 / received );
+
 
             std::cout << "(final) Total points (on trajectories): " << total_points << std::endl;
             std::cout << "(final) Exiting..." << std::endl;
@@ -233,12 +238,15 @@ void calculate_physical_correlation( std::vector<double> & physical_correlation,
     // подготавливает вектор нужного размера, заполняет его элементы нулями
     physical_correlation.resize( CORRELATION_FUNCTION_LENGTH );
 
+
+    // E = mu(0)*mu(t) / mu(0)*mu(0)
     // без трюка
+    double dip_initial = dipx[0] * dipx[0] + dipy[0] * dipy[0] + dipz[0] * dipz[0];
     for ( int n = 0; n < max_size; ++n )
     {
-        physical_correlation[n] = dipx[0] * dipx[n] + \
-                                  dipy[0] * dipy[n] + \
-                                  dipz[0] * dipz[n];
+        physical_correlation[n] = ( dipx[0] * dipx[n] + \
+                                    dipy[0] * dipy[n] + \
+                                    dipz[0] * dipz[n] ) / dip_initial;
     }
 
     // с трюком

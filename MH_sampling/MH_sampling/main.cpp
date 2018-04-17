@@ -64,7 +64,8 @@ void sample( std::vector<double> const & prev, std::vector<double> & next )
     // ----------------------------------------------------
 
     // Same gaussian for each direction
-    std::normal_distribution<double> distribution_gen(0.0, 1.5);
+    // std::normal_distribution<double> distribution_gen(0.0, 1.5);
+    std::normal_distribution<double> distribution_gen(0.0, 0.5);
     for (int i = 0; i < dim; ++i)
         next[i] = prev[i] + distribution_gen( generator );
 }
@@ -74,6 +75,7 @@ double integrand(const double x)
     return  ar_he_dip_buryak_fit(x) * ar_he_dip_buryak_fit(x);
 }
 
+// W = \rho * |mu|^2
 //x[0] == pR, x[1] == pTheta, x[2] = R, x[3] == pPhi, x[4] == Theta, x[5] == Phi
 double density( std::vector<double> const & x )
 {
@@ -84,7 +86,7 @@ double density( std::vector<double> const & x )
 
     if ((H > 0)  && (x[2] > Racc_min) && (x[2] < Racc_max))
     {
-        return exp(-H/3.166812E-6/295.0);
+        return ar_he_dip_buryak_fit(x[2]) * ar_he_dip_buryak_fit(x[2]) * exp(-H/3.166812E-6/295.0);
     }
     else
         return 0.0;
@@ -156,10 +158,10 @@ double MHA(const int burnin, const int chain_length, std::vector<double> & curr,
         //    std::cout << ">> iterations = " << iterations << "; integral_counter = " << integral_counter << "..." << std::endl;
     }
 
-    double integral_value = integral/integral_counter * VOLUME;
+    double integral_value = integral/integral_counter; // * VOLUME;
 
     std::cout << "Percentage of accepted: " << accepted / (double) iterations * 100.0 << std::endl;
-    // std::cout << "Dipole mean * Volume: " << integral_value << std::endl;
+    // std::cout << "Dipole mean over W: " << integral_value << std::endl;
 
     return integral_value;
 }
@@ -168,9 +170,9 @@ int main()
 {
     std::vector<double> x0{0.0, 0.0, 7.0, 0.0, 0.0, 0.0};
 
-    const std::string filename = "../initial_points_200000.txt";
-    const int burnin = 5e4;
-    const int chain_len = 2e5;
+    const std::string filename = "../initial_points_zimm_50000.txt";
+    const int burnin = 1e5;
+    const int chain_len = 5e4;
 
     auto start = std::clock();
 
