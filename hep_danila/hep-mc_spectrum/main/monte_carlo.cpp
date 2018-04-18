@@ -76,6 +76,43 @@ void syst_2D (REAL t ,REAL *y, REAL *f)
   delete [] out;
 }
 
+struct stop_after_precision
+{
+	stop_after_precision( double abs_error, double rel_error )
+		: abs_error(abs_error), rel_error(rel_error)
+	{
+	}
+
+	double abs_error;
+	double rel_error;
+
+	bool operator()(std::vector<hep::vegas_result<double>> const& r )
+	{
+		// print the results obtained so far
+		hep::vegas_verbose_callback<double>(r);
+
+		// compute cumulative result...
+		auto const result = hep::accumulate<hep::weighted_with_variance>(r.begin(), r.end() );
+
+		// check absolute and relative errors
+		if ( result.error() < abs_error )
+		{
+			std::cout << " absolute error " << result.error() << " is smaller than the limit " << abs_error << std::endl;
+
+			return false;
+		}
+
+		if ( result.error() < rel_error * result.value() )
+		{
+			std::cout << " relative error " << (result.error() / result.value()) << " is smaller than the limit " << rel_error << std::endl;
+			
+			return false;
+		}
+
+		return true;
+	}
+};
+
 
 double correlation(double R, double pR, double psi, double ppsi, double time)
 {
@@ -216,7 +253,10 @@ int main( int argc, char* argv[] )
 	ofstream file;
 	file.open( "correlation.txt" );
 	
-	hep::mpi_vegas_callback<double>( hep::mpi_vegas_verbose_callback<double> );
+	// понятия не имею какая должна быть абсолютная ошибка, будет считаться пока относительная не станет < 1e-3 = 0.1% 
+	// надо выставить циклов с запасом
+	hep::vegas_callback<double>( stop_after_precision(1e-50, 1e-3) ); 
+	
 
 	double MINTIME = 0.0;
 	double MAXTIME = 2000.0;
@@ -235,20 +275,20 @@ int main( int argc, char* argv[] )
 		auto numerator_results = hep::mpi_vegas(
 			MPI_COMM_WORLD,
 			hep::make_integrand<double>(numerator_integrand, dimension),
-			std::vector<std::size_t>(10, 1e3)
+			std::vector<std::size_t>(15, 1e4)
 		);
 
 		auto denominator_results = hep::mpi_vegas(
 			MPI_COMM_WORLD,
 			hep::make_integrand<double>(denominator_integrand, dimension),
-			std::vector<std::size_t>(5, 1e5)
+			std::vector<std::size_t>(20, 1e5)
 		);
 
-		auto numerator_result = hep::cumulative_result0( numerator_results.begin() + 2, numerator_results.end() );
-		auto denominator_result = hep::cumulative_result0( denominator_results.begin() + 2, denominator_results.end() );
-
-		double numerator_chi_square_dof = hep::chi_square_dof0( numerator_results.begin() + 2, numerator_results.end() );
-		double denominator_chi_square_dof = hep::chi_square_dof0( denominator_results.begin() + 2, denominator_results.end() );
+		auto numerator_result = hep::accumulate<hep::weighted_with_variance>(
+        	numerator_results.begin() + 1, numerator_results.end() );
+	
+		auto denominator_result = hep::accumulate<hep::weighted_with_variance>(
+			denominator_results.begin() + 1, denominator_results.end() );
 
 		double result = numerator_result.value()  / denominator_result.value()  * VOLUME ;
 		double error = numerator_result.error() / denominator_result.value() * VOLUME / result; // relative error of integration
@@ -276,3 +316,5 @@ int main( int argc, char* argv[] )
 
 	return 0;
 }
+
+

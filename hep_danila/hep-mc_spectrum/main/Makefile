@@ -9,7 +9,7 @@ all: $(TARGET)
 CXXFLAGS := -O2 -std=gnu++11 
 FORFLAGS := -O1
 
-INCLUDEHEP := -I"/home/artfin/Downloads/hep-mc-0.5/include"
+INCLUDEHEP := -I"/home/artfin/Downloads/hep-mc-0.6/include"
 #LIBS := -lgfortran -lmsmpi -lgsl -lgslcblas
 LIBS := -lgfortran
 
