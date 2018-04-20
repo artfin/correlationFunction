@@ -16,8 +16,6 @@
 #include "ar_he_pes.h"
 #include "diatomic_equations_2D.h"
 
-
-//#include "const_values.h"
 /* ------------------------ MODULE mgear.cpp ------------------------ */
 #include "../jean-pierre/basis.h"         /*  for umleiten, fprintf, stderr, scanf,  */
                            /*       printf, NULL, REAL, LZS, LZP,     */
@@ -26,23 +24,17 @@
                            /*       vminit, VEKTOR                    */
 #include "../jean-pierre/gear.h"          /*  for  gear4, gear_fehlertext            */
 //#include "../../jean-pierre/backup/t_dgls.h"        /*  for  bsptyp, dgls_waehlen              */
-
 /* ------------------------------------------------------------------ */
 
 const int dimension = 4;
 
-const double R0_num = 3.0;
-const double R0_den = 4.0;
+const double Rmin = 3.0;
+const double Rmax = 20.0;
 
-const double Rmax_num = 25.0;
-const double Rmax_den = 25.0;
-
-const double mu = 6632;
-//const double mu = 38000;
+const double mu = 6632.09;
 
 const double a0 = 0.52917721067E-10; //in m
-const double VOLUME = 4.0/3.0*M_PI*pow(Rmax_den*a0,3.0)  ;
-
+const double VOLUME = 4.0/3.0*M_PI*pow(Rmax * a0, 3.0)  ;
 
 using namespace std;
 using namespace std::placeholders;
@@ -79,92 +71,106 @@ void syst_2D (REAL t ,REAL *y, REAL *f)
 
 double correlation(double R, double pR, double psi, double ppsi, double time)
 {
-
-  REAL     epsabs;       /* absolute error bound                      */
-  REAL     epsrel;       /* relative error bound                      */
-  REAL     t0;           /* left edge of integration interval         */
-  REAL     *y0;          /* [0..n-1]-vector: initial value, approxim. */
+	REAL     epsabs = 1E-13;       /* absolute error bound                      */
+	REAL     epsrel = 1E-13;       /* relative error bound                      */
+  	REAL     t0 = 0.0;           /* left edge of integration interval         */
         
-  REAL     h;            /* initial, final step size                  */
-  REAL     xend;         /* right edge of integration interval        */
-  long     fmax;         /* maximal number of calls of right side     */
+  	REAL     h;            /* initial, final step size                  */
+  	REAL     xend;         /* right edge of integration interval        */
+  	long     fmax;         /* maximal number of calls of right side     */
                          /* in gear4()                                */
-  long     aufrufe;      /* actual number of function calls           */
+  	long     aufrufe;      /* actual number of function calls           */
 
-  int      N;             //number of DEs in system                   
-  int      fehler;       /* error code from umleiten(), gear4()       */
-  int      i;            /* loop counter                              */
+	// 2d trajectories
+  	int      N = 4;             //number of DEs in system                   
+  	int      fehler;       /* error code from umleiten(), gear4()       */
+  	int      i;            /* loop counter                              */
  
                         
-  void     *vmblock;     /* List of dynamically allocated vectors     */
+  	void     *vmblock;     /* List of dynamically allocated vectors     */
 
- // FILE * trajectory_file = fopen("correlation_tests.txt","w");
-
-/* -------------------- read input  -------------------- */
-
-  //N = 6; //3D
-  N = 4;//2D
+  	vmblock = vminit();                 /* initialize storage */
+	
+	/* out of memory? */ 
+  	if (! vmcomplete(vmblock))  
+	{       
+    	printf("mgear: out of memory.\n");
+    	throw std::runtime_error("out of memory!");
+ 	}
  
-  vmblock = vminit();                 /* initialize storage */
-  y0  = (REAL *)vmalloc(vmblock, VEKTOR, N, 0);
- 
-  if (! vmcomplete(vmblock))  {       /* out of memory? */
-    printf("mgear: out of memory.\n");
-    throw std::runtime_error("out of memory!");
-   // return 0;
-  }
- 
-  //double end = time;
-   
+  	std::vector<REAL> y0 = {R, pR, psi, ppsi};
+	std::vector<REAL> y0_back{R, -pR, psi, -ppsi};
 
-  double dipx, dipy, dipz;
-  double dipx0, dipy0, dipz0;
+	std::vector<double> dipx_forward, dipx_backward;
+	std::vector<double> dipy_forward, dipy_backward;
 
- 
-  epsabs = 1E-13;
-  epsrel = 1E-13;
+	dipx_forward.push_back( ar_he_dip_buryak_fit(R) * sin(psi) );
+	dipx_backward.push_back( ar_he_dip_buryak_fit(R) * sin(psi) );
+	
+	dipy_forward.push_back( ar_he_dip_buryak_fit(R) * cos(psi) );
+	dipy_backward.push_back( ar_he_dip_buryak_fit(R) * cos(psi) );
 
-  t0 = 0.0;
- 
-  y0[0] = R;
-  y0[1] = pR;
-  y0[2] = psi;
-  y0[3] = ppsi;
+  	h = 0.1;
+	xend = time;
+  	fmax = 1e8; 
 
+	if ( time == 0.0 )
+		return ar_he_dip_buryak_fit(R) * ar_he_dip_buryak_fit(R);
 
-  dipx0 = ar_he_dip_buryak_fit(R)*sin(psi);
-  dipy0 = ar_he_dip_buryak_fit(R)*cos(psi);
-   
-  h =0.1;
-  xend = time;
-  fmax = 1e6; 
-    
-  if (time > 10.0)
-  {
-     fehler = gear4(&t0, xend, N, syst_2D, y0, epsabs, epsrel, &h, fmax, &aufrufe);
+   	const int MaxTrajectoryLength = 1000;	
+	const double sampling_time = time;
+
+  	for ( int step_counter = 0; y0[0] < Rmax; step_counter++, xend += time )  
+  	{
+   		fehler = gear4(&t0, xend, N, syst_2D, &y0[0], epsabs, epsrel, &h, fmax, &aufrufe);
 	 
-	 if (fehler != 0) {
-	     printf(" Gear4: error n° %d\n", 10 + fehler);
-	     dipx = 0.0;
-	     dipy = 0.0;
-	}
-	else
-	{
-	  	dipx = ar_he_dip_buryak_fit(y0[0])*sin(y0[2]);
-	 	dipy = ar_he_dip_buryak_fit(y0[0])*cos(y0[2]);
-	}
- }
- 	else
-	{
-    	dipx = dipx0;
-    	dipy = dipy0;
-    }
+	 	if (fehler != 0) 
+	 	{
+	   		printf(" Gear4: error n° %d\n", 10 + fehler);
+			return 0;
+		}
 
-    
-     aufrufe = 0;
- 	 vmfree( vmblock );
+		if ( step_counter == MaxTrajectoryLength )
+			break;
+	
+		dipx_forward.push_back( ar_he_dip_buryak_fit(y0[0]) * sin(y0[2]) );
+	 	dipy_forward.push_back( ar_he_dip_buryak_fit(y0[0]) * cos(y0[2]) );
+ 	}
+
+	t0 = 0.0;
+	xend = time;
+	for ( int step_counter = 0; y0_back[0] < Rmax; step_counter++, xend += time )
+	{
+		fehler = gear4( &t0, xend, N, syst_2D, &y0_back[0], epsabs, epsrel, &h, fmax, &aufrufe );
+
+		if ( fehler != 0 )
+		{
+			std::cout << "Gear4: error n " << 10 + fehler << std::endl;
+			return 0;
+		}
+
+		if ( step_counter == MaxTrajectoryLength )
+			break;
+
+		dipx_backward.push_back( ar_he_dip_buryak_fit(y0_back[0]) * sin(y0_back[2]) );
+		dipy_backward.push_back( ar_he_dip_buryak_fit(y0_back[0]) * sin(y0_back[2]) );
+	}
+
+	double corr = 0.0;
+	if ( dipx_forward.size() > 1 )
+		for ( size_t k = 1; k < dipx_forward.size(); ++k )
+			corr += ( dipx_forward[k - 1] * dipx_forward[k] + dipy_forward[k - 1] * dipy_forward[k] );
+
+	if ( dipx_backward.size() > 1 )
+		for ( size_t k = 1; k < dipx_backward.size(); ++k )
+			corr += ( dipx_backward[k - 1] * dipx_backward[k] + dipy_backward[k - 1] * dipy_backward[k] );
+
+	corr /= ( dipx_forward.size() + dipx_backward.size() - 2 );
+
+    aufrufe = 0;
+ 	vmfree( vmblock );
   
-	return dipx0*dipx + dipy0*dipy;
+	return corr; 
 }
 
 double integrand_full( hep::mc_point<double> const& x, double time, bool is_num)
@@ -183,23 +189,15 @@ double integrand_full( hep::mc_point<double> const& x, double time, bool is_num)
 	//double pTJ = M_PI* (1 + pTheta*pTheta);
 	double pTJ = M_PI/2.0* (1 + pTheta*pTheta);
 
-	double R,   RJ;
-
 	double result; 
+	double R  = x.point()[2] * (Rmax - Rmin) + Rmin;
+	double RJ = Rmax - Rmin; 
 	if (is_num)
-	{
-		R  = x.point()[2] * (Rmax_num-R0_num) + R0_num;
-		//result = pTheta* ar_he_dip_buryak_fit(R)*ar_he_dip_buryak_fit(R)*density_full(pR, pTheta, R, Theta);
-		result = pTheta* correlation(R, pR, Theta, pTheta, time)*density_full(pR, pTheta, R, Theta);
-		//result = density_full(pR, pTheta, R, Theta);
-		RJ = (Rmax_num-R0_num);
-	}
+		result = pTheta * correlation(R, pR, Theta, pTheta, time) * density_full(pR, pTheta, R, Theta);
+	
 	else
-	{
-		R  = x.point()[2] * (Rmax_den-R0_den) + R0_den;
-		result = pTheta* density_full(pR, pTheta, R, Theta);
-		RJ = (Rmax_den-R0_den);
-	}
+		result = pTheta * density_full(pR, pTheta, R, Theta);
+	
 	return result*RJ*THJ*pRJ*pTJ;
 }
 
@@ -219,7 +217,7 @@ int main( int argc, char* argv[] )
 	hep::mpi_vegas_callback<double>( hep::mpi_vegas_verbose_callback<double> );
 
 	double MINTIME = 0.0;
-	double MAXTIME = 2000.0;
+	double MAXTIME = 400.0;
 	double timstep = 400.0;
 
 	for (double TIME = MINTIME; TIME <= MAXTIME; TIME += timstep )
