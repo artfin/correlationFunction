@@ -1,0 +1,9 @@
+ar_he_dip_buryak_fit.cpp
+ar_he_dip_buryak_fit.h
+ar_he_pes.cpp
+ar_he_pes.h
+ar_he_pes_der.cpp
+ar_he_pes_der.h
+diatomic_equations_2D.cpp
+diatomic_equations_2D.h
+monte_carlo.cpp
