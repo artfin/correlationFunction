@@ -30,12 +30,19 @@
 const int dimension = 4;
 
 const double Rmin = 3.0;
-const double Rmax = 20.0;
+const double Rmax = 25.0;
 
-const double mu = 6632.09;
+const double mu = 6632.039;
 
 const double a0 = 0.52917721067E-10; //in m
 const double VOLUME = 4.0/3.0*M_PI*pow(Rmax * a0, 3.0)  ;
+
+const double Temperature = 295.0;
+
+// hartree to joules
+const double HTOJ = 4.35974417 * pow(10, -18);
+// boltzmann constant
+const long double BOLTZCONST = 1.38064852 * pow(10, -23);
 
 class SplinedData
 {
@@ -110,16 +117,16 @@ std::vector<double> SplinedData::xmax_values;
 double density_full(double pR, double pTheta, double R, double Theta, SplinedData const & sd )
 {
     double H = pR * pR / 2.0 / mu + pTheta * pTheta / 2.0 / mu / R / R + ar_he_pot(R);
-
-    // xmax = -1, если при данном J нет xmax
-    // квазисвязанные (фактически связанные для двух атомов): R < Xmax(J)
-    if ( R < sd.xmax(pTheta) )
-        return 0.0;
+        
+    double xmax = sd.xmax( pTheta ); // положение максимума
+    double eff_pot = ar_he_pot(xmax) + std::pow(pTheta, 2.0) / 2.0 / mu / xmax / xmax; 
+   
+	// квазисвязанное состояние: левее локального максимума и энергия меньше максимума
+    if ( R < xmax && H < eff_pot )
+	    return 0.0;
 
     if ( H > 0 )
-	{
-        return std::exp(-H / 3.166812E-6 / 295.0);
-	}
+		return std::exp(- HTOJ * H / (BOLTZCONST * Temperature) );
 	else
 		return 0.0;
 }
@@ -252,13 +259,13 @@ int main( int argc, char* argv[] )
 		auto numerator_results = hep::mpi_vegas(
 			MPI_COMM_WORLD,
 			hep::make_integrand<double>(numerator_integrand, dimension),
-			std::vector<std::size_t>(10, 1e3)
+			std::vector<std::size_t>(5, 2e6)
 		);
 
 		auto denominator_results = hep::mpi_vegas(
 			MPI_COMM_WORLD,
 			hep::make_integrand<double>(denominator_integrand, dimension),
-			std::vector<std::size_t>(5, 1e5)
+			std::vector<std::size_t>(5, 2e6)
 		);
 
 		auto numerator_result = hep::cumulative_result0( numerator_results.begin() + 2, numerator_results.end() );
