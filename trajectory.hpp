@@ -58,6 +58,8 @@ public:
 
     void run_trajectory( dglsysfnk syst );
 
+    double get_weight () const { return y0[0] * y0[0] * std::sin(y0[2]); }
+
     std::vector<double> get_initial_dip( void )
     {
         std::vector<double> res( 3 );

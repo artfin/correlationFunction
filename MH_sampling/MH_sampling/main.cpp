@@ -65,28 +65,28 @@ void sample( std::vector<double> const & prev, std::vector<double> & next )
 
     // Same gaussian for each direction
     // std::normal_distribution<double> distribution_gen(0.0, 1.5);
-    std::normal_distribution<double> distribution_gen(0.0, 0.5);
+    std::normal_distribution<double> distribution_gen(0.0, 0.35);
     for (int i = 0; i < dim; ++i)
         next[i] = prev[i] + distribution_gen( generator );
 }
 
-double integrand(const double x)
+double integrand( std::vector<double> const & x )
 {
-    return  ar_he_dip_buryak_fit(x) * ar_he_dip_buryak_fit(x);
+    return  ar_he_dip_buryak_fit(x[2]) * ar_he_dip_buryak_fit(x[2]) * x[2] * x[2] * std::sin(x[4]);
 }
 
-// W = \rho * |mu|^2
+// W = \rho * |mu|^2 / R^2 / \sin(Theta)
 //x[0] == pR, x[1] == pTheta, x[2] = R, x[3] == pPhi, x[4] == Theta, x[5] == Phi
 double density( std::vector<double> const & x )
 {
     double H = x[0] * x[0] / 2.0 / mu + \
             x[1] *x[1] / mu / x[2] / x[2] / 2.0 + \
-            x[3] * x[3] / mu / x[2] / x[2] / std::sin(x[4]) / std::sin(x[4])
-     + ar_he_pot(x[2]);
+            x[3] * x[3] / mu / x[2] / x[2] / std::sin(x[4]) / std::sin(x[4]) + \
+            ar_he_pot(x[2]);
 
     if ((H > 0)  && (x[2] > Racc_min) && (x[2] < Racc_max))
     {
-        return ar_he_dip_buryak_fit(x[2]) * ar_he_dip_buryak_fit(x[2]) * exp(-H/3.166812E-6/295.0);
+        return ar_he_dip_buryak_fit(x[2]) * ar_he_dip_buryak_fit(x[2]) * exp(-H/3.166812E-6/295.0) / x[2] / x[2] / std::sin(x[4]);
     }
     else
         return 0.0;
@@ -144,12 +144,14 @@ double MHA(const int burnin, const int chain_length, std::vector<double> & curr,
                  out << curr[2] << " " << curr[0] << " " << map_ang(curr[4], M_PI) << " " << curr[1] << " "
                      << map_ang(curr[5], 2 * M_PI) << " " << curr[3] << std::endl;
 
-                 integral += integrand(curr[2]);
-                 d = integrand(curr[2]) - mean;
+                 double integrand_ = integrand(curr);
+
+                 integral += integrand_;
+                 d = integrand_ - mean;
                  mean += d / ( (double) integral_counter + 1.0 );
                  ++integral_counter;
 
-                 if ( integral_counter % 1000 == 0 )
+                 if ( integral_counter % 10000 == 0 )
                     std::cout << "integral_counter: " << integral_counter << std::endl;
             }
         }
@@ -170,9 +172,9 @@ int main()
 {
     std::vector<double> x0{0.0, 0.0, 7.0, 0.0, 0.0, 0.0};
 
-    const std::string filename = "../initial_points_zimm_1000000.txt";
+    const std::string filename = "../test.txt";
     const int burnin = 1e5;
-    const int chain_len = 1e6;
+    const int chain_len = 2e5;
 
     auto start = std::clock();
 

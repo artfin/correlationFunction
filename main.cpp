@@ -111,7 +111,7 @@ void master_code( int world_size )
 
     std::vector<std::vector<double>> samples;
     const int samples_to_read = 1000;
-    read_initial_conditions(samples, "../initial_points_zimm_50000.txt", samples_to_read);
+    read_initial_conditions(samples, "../initial_points_transformed_space_1e5.txt", samples_to_read);
     std::cout << "Samples len: " << samples.size() << std::endl;
 
     const int toSave = 1000; // размер сохраняемого блока
@@ -224,10 +224,11 @@ void master_code( int world_size )
     }
 }
 
+// weight = R^2 \sin \Theta
 void calculate_physical_correlation( std::vector<double> & physical_correlation,
                                      std::vector<double> & dipx,
                                      std::vector<double> & dipy,
-                                     std::vector<double> & dipz )
+                                     std::vector<double> & dipz, const double weight )
 {
     size_t size = dipx.size();
     assert( dipy.size() == size );
@@ -246,7 +247,7 @@ void calculate_physical_correlation( std::vector<double> & physical_correlation,
     {
         physical_correlation[n] = ( dipx[0] * dipx[n] + \
                                     dipy[0] * dipy[n] + \
-                                    dipz[0] * dipz[n] ) / dip_initial;
+                                    dipz[0] * dipz[n] ) / dip_initial * weight;
     }
 
     // с трюком
@@ -283,6 +284,7 @@ void slave_code( int world_rank )
 
     int trajectory_len;
 
+
     while ( true )
     {
         std::clock_t start = clock();
@@ -292,6 +294,8 @@ void slave_code( int world_rank )
         // обсчитывать не надо, то exit_status = true и, соответственно, текущий процесс выходит из бесконечного цикла
         // и прекращает свою работу.
         exit_status = trajectory.receive_initial_conditions( );
+
+        double weight = trajectory.get_weight();
 
         if ( exit_status )
         {
@@ -335,7 +339,7 @@ void slave_code( int world_rank )
                   << " trajectory. npoints = " << dipz_forward.size() << "; time = "
                   << (clock() - start) / (double) CLOCKS_PER_SEC << "s" << std::endl;
 
-        calculate_physical_correlation(correlation_function, dipx_forward, dipy_forward, dipz_forward);
+        calculate_physical_correlation(correlation_function, dipx_forward, dipy_forward, dipz_forward, weight);
 
         // Отправляем собранный массив корреляций мастер-процессу
         MPI_Send( &correlation_function[0], CORRELATION_FUNCTION_LENGTH, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD );

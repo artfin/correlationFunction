@@ -106,6 +106,12 @@ std::vector<double> SplinedData::xmax_values;
 
 double integrand_(hep::mc_point<double> const& x, double Temperature, SplinedData const & sd, bool numerator )
 {
+    static int call_count = 0;
+    call_count++;
+
+    if ( call_count % (int) 1e5 == 0 )
+        std::cout << std::endl << "call count: " << call_count << std::endl << std::endl;
+
     double R_new = x.point()[0];
     double pR_new = x.point()[1];
     double theta_new = x.point()[2];
