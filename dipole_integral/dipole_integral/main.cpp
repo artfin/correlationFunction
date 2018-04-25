@@ -21,8 +21,8 @@ const double MU = 6632.039;
 
 // ------------------------------------------------------
 // расстояние, вплоть до которого ведется интегрирование
-const double Rint_min = 4.0; // a0
-const double Rint_max = 25.0; // a0
+const double Rint_min = 6.0; // a0
+const double Rint_max = 8.0; // a0
 // ------------------------------------------------------
 
 double integrand_(hep::mc_point<double> const& x, double Temperature, bool numerator )

@@ -251,11 +251,6 @@ double correlation(double R, double pR, double psi, double ppsi, double time)
 
 double integrand_full( hep::mc_point<double> const& x, double time, bool is_num)
 {	
-	
-
-
-
-
 	double pR = tan(M_PI * (x.point()[0] - 0.5));
 	//double pTheta = tan(M_PI * (x.point()[1] - 0.5));
 	double pTheta =  tan(M_PI * (x.point()[1]/2.0));

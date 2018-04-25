@@ -13,18 +13,18 @@
 #include "ar_he_dip_buryak_fit.hpp"
 #include "ar_he_pes.hpp"
 
-const double Racc_max = 60.0;
+const double Racc_max = 40.0;
 const double Racc_min = 2.0;
 const int dim = 6;
 
-const double Rint_max = 40.0;
+const double Rint_max = 20.0;
 const double Rint_min = 4.0;
 
 const double a0 = 0.529E-10; //in m
 
-const double VOLUME = 4.0/3.0*M_PI*pow(40.0*a0,3.0)  ;
+const double VOLUME = 4.0/3.0*M_PI*pow(Rint_max * a0,3.0)  ;
 
-const double mu = 6632;
+const double mu = 6632.039;
 
 unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 std::mt19937 generator{ seed };
